@@ -1,0 +1,128 @@
+{% extends "base.html" %} {% block title %}Track Search - Spotify Library
+Manager{% endblock %} {% block extra_style %} .search-input { font-size: 1.1rem;
+padding: 0.6rem 0.8rem; width: 100%; max-width: 30rem; box-sizing: border-box;
+border: 1px solid #ccc; border-radius: 6px; } .search-input:focus { outline: 2px
+solid #1db954; outline-offset: -1px; } .result { border: 1px solid #ddd;
+border-radius: 8px; padding: 1rem; margin: 0.75rem 0; } .result-title { display:
+flex; align-items: center; gap: 0.6rem; font-weight: bold; margin-bottom:
+0.5rem; } .result-thumb { width: 2.5rem; height: 2.5rem; border-radius: 4px;
+object-fit: cover; background: #ddd; flex-shrink: 0; } .result-embed { border:
+none; border-radius: 12px; width: 100%; height: 80px; } {% endblock %} {% block
+content %}
+<h1>Track Search</h1>
+<p>
+    Search Spotify's catalog and preview any track - handy for testing the
+    embedded player.
+</p>
+
+{% if needs_credentials %}
+<p class="warning">
+    No Spotify credentials found. Copy <code>.env.example</code> to
+    <code>.env</code> and fill in <code>SPOTIFY_CLIENT_ID</code> and
+    <code>SPOTIFY_CLIENT_SECRET</code>, then restart the app. See the README for
+    how to register a Spotify app.
+</p>
+{% elif not logged_in %}
+<p><a class="button" href="{{ url_for('login') }}">Log in with Spotify</a></p>
+{% else %}
+<input
+    type="text"
+    id="search-input"
+    class="search-input"
+    placeholder="Search for a song or artist…"
+    autocomplete="off"
+/>
+<p id="search-hint" class="hint">Start typing to search.</p>
+<div id="results"></div>
+
+<script>
+    const input = document.getElementById("search-input");
+    const resultsEl = document.getElementById("results");
+    const hintEl = document.getElementById("search-hint");
+
+    let debounceTimer = null;
+    let currentController = null;
+
+    function renderResults(tracks) {
+        resultsEl.innerHTML = "";
+        tracks.forEach((t) => {
+            const div = document.createElement("div");
+            div.className = "result";
+
+            const title = document.createElement("div");
+            title.className = "result-title";
+
+            if (t.image_url) {
+                const img = document.createElement("img");
+                img.className = "result-thumb";
+                img.src = t.image_url;
+                img.alt = "";
+                title.appendChild(img);
+            }
+
+            const label = document.createElement("span");
+            label.textContent = t.artists + " – " + t.name;
+            title.appendChild(label);
+            div.appendChild(title);
+
+            const trackId = t.uri.split(":").pop();
+            const iframe = document.createElement("iframe");
+            iframe.className = "result-embed";
+            iframe.src =
+                "https://open.spotify.com/embed/track/" +
+                trackId +
+                "?utm_source=generator&theme=0";
+            iframe.frameBorder = "0";
+            iframe.allow =
+                "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture";
+            iframe.loading = "lazy";
+            div.appendChild(iframe);
+
+            resultsEl.appendChild(div);
+        });
+    }
+
+    async function runSearch(query) {
+        if (currentController) currentController.abort();
+        const controller = new AbortController();
+        currentController = controller;
+
+        try {
+            const resp = await fetch(
+                "{{ url_for('api_search') }}?q=" + encodeURIComponent(query),
+                { signal: controller.signal },
+            );
+            if (resp.status === 401) {
+                window.location = "{{ url_for('login') }}";
+                return;
+            }
+            const tracks = await resp.json();
+            if (tracks.length === 0) {
+                hintEl.textContent = "No results.";
+                hintEl.style.display = "block";
+            } else {
+                hintEl.style.display = "none";
+            }
+            renderResults(tracks);
+        } catch (e) {
+            if (e.name !== "AbortError") {
+                hintEl.textContent = "Search failed. Try again.";
+                hintEl.style.display = "block";
+            }
+        }
+    }
+
+    input.addEventListener("input", () => {
+        clearTimeout(debounceTimer);
+        const query = input.value.trim();
+        if (!query) {
+            if (currentController) currentController.abort();
+            resultsEl.innerHTML = "";
+            hintEl.textContent = "Start typing to search.";
+            hintEl.style.display = "block";
+            return;
+        }
+        debounceTimer = setTimeout(() => runSearch(query), 400);
+    });
+</script>
+{% endif %} {% endblock %}

@@ -1,0 +1,9 @@
+{% extends "base.html" %} {% block title %}Done - Spotify Library Manager{%
+endblock %} {% block content %}
+<h1>Done</h1>
+<p>
+    Removed {{ removed_count }} track{{ 's' if removed_count != 1 else '' }}
+    from the selected playlists.
+</p>
+<p><a class="button" href="{{ url_for('duplicates_picker') }}">Back</a></p>
+{% endblock %}

@@ -1,0 +1,61 @@
+{% extends "base.html" %} {% block title %}Duplicates - Spotify Library
+Manager{% endblock %} {% block extra_style %} .dup-group { border: 1px solid
+#ddd; border-radius: 8px; padding: 1rem; margin: 0.75rem 0; } .dup-title {
+font-weight: bold; margin-bottom: 0.5rem; } .dup-embed { border: none;
+border-radius: 12px; width: 100%; height: 80px; margin-bottom: 0.5rem; }
+.occurrence { display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem
+0; cursor: pointer; } .occurrence .playlist-name { flex: 1; } .occurrence
+.added-date { color: #666; font-size: 0.85rem; } {% endblock %} {% block content
+%}
+<h1>Duplicates</h1>
+
+{% if not duplicates %}
+<p class="hint">No duplicates found across the selected playlists.</p>
+<p><a class="button" href="{{ url_for('duplicates_picker') }}">Back</a></p>
+{% else %}
+<p>
+    Found {{ duplicates|length }} track{{ 's' if duplicates|length != 1 else ''
+    }} that {{ 'appear' if duplicates|length != 1 else 'appears' }} in more than
+    one playlist. Check the playlists you want to remove each from.
+</p>
+<form method="post" action="{{ url_for('duplicates_remove') }}">
+    {% for dup in duplicates %}
+    <div class="dup-group">
+        <div class="dup-title">{{ dup.artists }} – {{ dup.name }}</div>
+        <iframe
+            class="dup-embed"
+            src="https://open.spotify.com/embed/track/{{ dup.uri.split(':')[-1] }}?utm_source=generator&theme=0"
+            frameborder="0"
+            allow="
+                autoplay;
+                clipboard-write;
+                encrypted-media;
+                fullscreen;
+                picture-in-picture;
+            "
+            loading="lazy"
+        ></iframe>
+        {% for occ in dup.occurrences %}
+        <label class="occurrence">
+            <input
+                type="checkbox"
+                name="remove"
+                value="{{ occ.playlist_id }}::{{ dup.uri }}"
+            />
+            <span class="playlist-name">{{ occ.playlist_name }}</span>
+            <span class="added-date"
+                >added {{ occ.added_at[:10] if occ.added_at else 'unknown date'
+                }}</span
+            >
+        </label>
+        {% endfor %}
+    </div>
+    {% endfor %}
+    <p style="margin-top: 1.5rem">
+        <button class="button" type="submit">Remove selected</button>
+        <a class="button secondary" href="{{ url_for('duplicates_picker') }}"
+            >Cancel</a
+        >
+    </p>
+</form>
+{% endif %} {% endblock %}

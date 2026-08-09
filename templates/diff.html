@@ -1,0 +1,49 @@
+{% extends "base.html" %} {% block title %}Preview changes - Spotify Library
+Manager{% endblock %} {% block extra_style %} h2 { margin-top: 2rem; } ul {
+max-height: 16rem; overflow-y: auto; padding-left: 1.2rem; } .empty { color:
+#666; } {% endblock %} {% block content %}
+<h1>Preview</h1>
+
+<h2>Add ({{ add_count }})</h2>
+{% if not names_loaded %} {% if add_count %}
+<p class="hint">Track names not loaded (large diff).</p>
+{% else %}
+<p class="empty">Nothing to add.</p>
+{% endif %} {% elif add_labels %}
+<ul>
+    {% for label in add_labels %}
+    <li>{{ label }}</li>
+    {% endfor %}
+</ul>
+{% else %}
+<p class="empty">Nothing to add.</p>
+{% endif %}
+
+<h2>Remove ({{ remove_count }})</h2>
+{% if not names_loaded %} {% if remove_count %}
+<p class="hint">Track names not loaded (large diff).</p>
+{% else %}
+<p class="empty">Nothing to remove.</p>
+{% endif %} {% elif remove_labels %}
+<ul>
+    {% for label in remove_labels %}
+    <li>{{ label }}</li>
+    {% endfor %}
+</ul>
+{% else %}
+<p class="empty">Nothing to remove.</p>
+{% endif %} {% if not names_loaded and (add_count or remove_count) %}
+<p>
+    <a class="button secondary" href="{{ url_for('diff_names') }}"
+        >Show track names</a
+    >
+</p>
+{% endif %}
+
+<form action="{{ url_for('apply') }}" method="post" style="margin-top: 2rem">
+    <button class="button" type="submit">Apply</button>
+    <a class="button secondary" href="{{ url_for('liked_songs_sync') }}"
+        >Cancel</a
+    >
+</form>
+{% endblock %}

@@ -1,0 +1,656 @@
+{% extends "base.html" %} {% block title %}Playlist Filter - Spotify Library
+Manager{% endblock %} {% block extra_style %} fieldset { border: 1px solid #ddd;
+border-radius: 8px; padding: 1rem; margin: 1rem 0; } legend { font-weight: bold;
+padding: 0 0.4rem; } .combo-row { display: flex; align-items: flex-start; gap:
+0.5rem; margin-bottom: 0.5rem; } .combo { position: relative; flex: 1; }
+.combo-input { font-size: 1rem; padding: 0.5rem 0.6rem; width: 100%; max-width:
+100%; box-sizing: border-box; border: 1px solid #ccc; border-radius: 6px; }
+.combo-input:focus { outline: 2px solid #1db954; outline-offset: -1px; }
+.combo-panel { display: none; position: absolute; top: 100%; left: 0; right: 0;
+z-index: 10; background: white; border: 1px solid #ccc; border-radius: 6px;
+margin-top: 0.25rem; max-height: 16rem; overflow-y: auto; box-shadow: 0 4px 12px
+rgba(0, 0, 0, 0.12); } .combo-option { display: flex; align-items: center; gap:
+0.6rem; padding: 0.5rem 0.6rem; cursor: pointer; } .combo-option:hover,
+.combo-option.highlighted { background: #f0f0f0; } .combo-thumb { width: 2rem;
+height: 2rem; border-radius: 4px; object-fit: cover; background: #ddd;
+flex-shrink: 0; } .combo-thumb.placeholder { display: flex; align-items: center;
+justify-content: center; font-size: 1rem; } .combo-empty { padding: 0.5rem
+0.6rem; color: #666; } .remove-slot-btn { padding: 0.5rem 0.75rem !important;
+margin-right: 0 !important; } .criteria-row { display: flex; flex-wrap: wrap;
+gap: 0.5rem; align-items: center; } .criteria-row select, .criteria-row
+input[type="text"], .criteria-row input[type="number"] { font-size: 1rem;
+padding: 0.5rem 0.6rem; border: 1px solid #ccc; border-radius: 6px; }
+.dest-option { display: block; margin: 0.5rem 0; } .dest-detail { margin: 0.5rem
+0 0.5rem 1.5rem; } {% endblock %} {% block content %}
+<h1>Playlist Filter</h1>
+<p>
+    Find tracks in one or more playlists matching a condition, and add them to
+    another playlist.
+</p>
+
+{% if needs_credentials %}
+<p class="warning">
+    No Spotify credentials found. Copy <code>.env.example</code> to
+    <code>.env</code> and fill in <code>SPOTIFY_CLIENT_ID</code> and
+    <code>SPOTIFY_CLIENT_SECRET</code>, then restart the app. See the README for
+    how to register a Spotify app.
+</p>
+{% elif not logged_in %}
+<p><a class="button" href="{{ url_for('login') }}">Log in with Spotify</a></p>
+{% else %}
+<div id="configured-view" style="display: none">
+    <p>Looking in:</p>
+    <ul id="configured-sources"></ul>
+    <p id="configured-criteria"></p>
+    <p id="configured-destination"></p>
+    <p>
+        <a class="button" id="scan-link" href="#">Find Matches</a>
+        <button class="button secondary" id="edit-btn" type="button">
+            Edit
+        </button>
+    </p>
+</div>
+
+<div id="picker-view" style="display: none">
+    <fieldset>
+        <legend>Look in these playlists</legend>
+        <div id="source-combo-list"></div>
+        <p>
+            <button class="button secondary" id="add-source-btn" type="button">
+                + Add another playlist
+            </button>
+        </p>
+    </fieldset>
+
+    <fieldset>
+        <legend>Find tracks where</legend>
+        <div class="criteria-row">
+            <select id="field-select">
+                <option value="release_year">Release year</option>
+                <option value="popularity">Popularity (0-100)</option>
+                <option value="explicit">Explicit</option>
+                <option value="artist">Artist name</option>
+                <option value="track_name">Track name</option>
+            </select>
+            <select id="operator-select"></select>
+            <span id="value-inputs"></span>
+        </div>
+    </fieldset>
+
+    <fieldset>
+        <legend>Add matches to</legend>
+        <label class="dest-option">
+            <input type="radio" name="dest-mode" value="existing" checked /> An
+            existing playlist
+        </label>
+        <div class="dest-detail" id="dest-existing">
+            <div class="combo" id="dest-combo">
+                <input
+                    type="text"
+                    id="dest-combo-input"
+                    class="combo-input"
+                    placeholder="Search your playlists…"
+                    autocomplete="off"
+                />
+                <div class="combo-panel" id="dest-combo-panel"></div>
+            </div>
+        </div>
+        <label class="dest-option">
+            <input type="radio" name="dest-mode" value="new" /> A new playlist
+        </label>
+        <div class="dest-detail" id="dest-new" style="display: none">
+            <input
+                type="text"
+                id="dest-new-name"
+                placeholder="New playlist name"
+            />
+        </div>
+    </fieldset>
+
+    <p id="picker-loading"><span class="spinner"></span>Loading playlists…</p>
+    <p class="warning" id="picker-error" style="display: none"></p>
+    <p>
+        <button class="button" id="save-btn" type="button">Save</button>
+        <button
+            class="button secondary"
+            id="cancel-btn"
+            type="button"
+            style="display: none"
+        >
+            Cancel
+        </button>
+    </p>
+</div>
+
+<script>
+    const STORAGE_KEY = "spotifyLibraryManager.playlistFilter";
+
+    const FIELD_OPERATORS = {
+        release_year: [
+            { value: "is", label: "is" },
+            { value: "before", label: "is before" },
+            { value: "after", label: "is after" },
+            { value: "between", label: "is between" },
+        ],
+        popularity: [
+            { value: "at_least", label: "is at least" },
+            { value: "at_most", label: "is at most" },
+        ],
+        explicit: [{ value: "is", label: "is" }],
+        artist: [{ value: "contains", label: "contains" }],
+        track_name: [{ value: "contains", label: "contains" }],
+    };
+    const FIELD_LABELS = {
+        release_year: "Release year",
+        popularity: "Popularity",
+        explicit: "Explicit",
+        artist: "Artist name",
+        track_name: "Track name",
+    };
+    const OPERATOR_LABELS = {
+        is: "is",
+        before: "is before",
+        after: "is after",
+        between: "is between",
+        at_least: "is at least",
+        at_most: "is at most",
+        contains: "contains",
+    };
+
+    function getSaved() {
+        try {
+            const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
+            return parsed &&
+                Array.isArray(parsed.sources) &&
+                parsed.sources.length >= 1
+                ? parsed
+                : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function describeCriterion(saved) {
+        let desc =
+            FIELD_LABELS[saved.field] +
+            " " +
+            OPERATOR_LABELS[saved.operator] +
+            " ";
+        if (saved.field === "explicit") {
+            desc += saved.value === "yes" ? "yes" : "no";
+        } else if (saved.operator === "between") {
+            desc += saved.value + " and " + saved.value2;
+        } else {
+            desc += '"' + saved.value + '"';
+        }
+        return desc;
+    }
+
+    function describeDestination(saved) {
+        if (saved.destMode === "new") {
+            return 'Add to new playlist "' + saved.destNewName + '"';
+        }
+        return 'Add to "' + saved.destPlaylistName + '"';
+    }
+
+    function showConfigured(saved) {
+        document.getElementById("picker-view").style.display = "none";
+        document.getElementById("configured-view").style.display = "block";
+
+        const list = document.getElementById("configured-sources");
+        list.innerHTML = "";
+        saved.sources.forEach((p) => {
+            const li = document.createElement("li");
+            li.textContent = p.name;
+            list.appendChild(li);
+        });
+
+        document.getElementById("configured-criteria").textContent =
+            "Where " + describeCriterion(saved);
+        document.getElementById("configured-destination").textContent =
+            describeDestination(saved);
+
+        const params = new URLSearchParams();
+        saved.sources.forEach((p) => params.append("playlist_id", p.id));
+        params.set("field", saved.field);
+        params.set("operator", saved.operator);
+        params.set("value", saved.value);
+        params.set("value2", saved.value2 || "");
+        params.set("destination_mode", saved.destMode);
+        if (saved.destMode === "new") {
+            params.set("destination_name", saved.destNewName);
+        } else {
+            params.set("destination_playlist_id", saved.destPlaylistId);
+            params.set("destination_playlist_name", saved.destPlaylistName);
+        }
+        document.getElementById("scan-link").href =
+            "{{ url_for('playlist_filter_scan') }}?" + params.toString();
+    }
+
+    let playlistsCache = null;
+
+    async function fetchPlaylists() {
+        if (playlistsCache) return playlistsCache;
+        const resp = await fetch("{{ url_for('api_playlists') }}");
+        if (resp.status === 401) {
+            window.location = "{{ url_for('login') }}";
+            return [];
+        }
+        playlistsCache = await resp.json();
+        return playlistsCache;
+    }
+
+    // Core searchable combobox behavior, shared by the dynamic source rows
+    // and the single destination combo.
+    function setupCombo(input, panel, initial) {
+        const state = {
+            id: initial ? initial.id : null,
+            name: initial ? initial.name : null,
+            filtered: [],
+            highlighted: -1,
+        };
+        input.value = state.name || "";
+
+        function renderPanel() {
+            panel.innerHTML = "";
+            if (state.filtered.length === 0) {
+                const empty = document.createElement("div");
+                empty.className = "combo-empty";
+                empty.textContent = "No playlists match.";
+                panel.appendChild(empty);
+                return;
+            }
+            state.filtered.forEach((p, idx) => {
+                const opt = document.createElement("div");
+                opt.className =
+                    "combo-option" +
+                    (idx === state.highlighted ? " highlighted" : "");
+                if (p.image_url) {
+                    const img = document.createElement("img");
+                    img.className = "combo-thumb";
+                    img.src = p.image_url;
+                    img.alt = "";
+                    opt.appendChild(img);
+                } else {
+                    const placeholder = document.createElement("div");
+                    placeholder.className = "combo-thumb placeholder";
+                    placeholder.textContent = "🎵";
+                    opt.appendChild(placeholder);
+                }
+                const label = document.createElement("span");
+                label.textContent = p.name;
+                opt.appendChild(label);
+                opt.addEventListener("mousedown", (e) => {
+                    e.preventDefault();
+                    select(p);
+                });
+                panel.appendChild(opt);
+            });
+        }
+
+        function filter(query) {
+            const all = playlistsCache || [];
+            const q = query.trim().toLowerCase();
+            state.filtered = q
+                ? all.filter((p) => p.name.toLowerCase().includes(q))
+                : all;
+            state.highlighted = -1;
+            renderPanel();
+        }
+
+        function open() {
+            panel.style.display = "block";
+            filter(input.value === (state.name || "") ? "" : input.value);
+        }
+
+        function close() {
+            panel.style.display = "none";
+        }
+
+        function select(p) {
+            state.id = p.id;
+            state.name = p.name;
+            input.value = p.name;
+            close();
+        }
+
+        input.addEventListener("focus", () => {
+            input.select();
+            open();
+        });
+        input.addEventListener("input", () => {
+            filter(input.value);
+            panel.style.display = "block";
+        });
+        input.addEventListener("blur", () => {
+            setTimeout(() => {
+                close();
+                input.value = state.name || "";
+            }, 100);
+        });
+        input.addEventListener("keydown", (e) => {
+            if (e.key === "ArrowDown") {
+                e.preventDefault();
+                if (panel.style.display !== "block") {
+                    open();
+                    return;
+                }
+                state.highlighted = Math.min(
+                    state.highlighted + 1,
+                    state.filtered.length - 1,
+                );
+                renderPanel();
+            } else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                state.highlighted = Math.max(state.highlighted - 1, 0);
+                renderPanel();
+            } else if (e.key === "Enter") {
+                e.preventDefault();
+                if (
+                    state.highlighted >= 0 &&
+                    state.filtered[state.highlighted]
+                ) {
+                    select(state.filtered[state.highlighted]);
+                }
+            } else if (e.key === "Escape") {
+                close();
+                input.value = state.name || "";
+                input.blur();
+            }
+        });
+
+        return {
+            getValue: () => ({ id: state.id, name: state.name }),
+            setValue: (id, name) => {
+                state.id = id;
+                state.name = name;
+                input.value = name || "";
+            },
+        };
+    }
+
+    let sourceRows = [];
+
+    function updateSourceRemoveButtons() {
+        const disable = sourceRows.length <= 1;
+        sourceRows.forEach((entry) => {
+            entry.row.querySelector(".remove-slot-btn").disabled = disable;
+        });
+    }
+
+    function addSourceRow(initial) {
+        const row = document.createElement("div");
+        row.className = "combo-row";
+        const comboDiv = document.createElement("div");
+        comboDiv.className = "combo";
+        const input = document.createElement("input");
+        input.type = "text";
+        input.className = "combo-input";
+        input.placeholder = "Search your playlists…";
+        input.autocomplete = "off";
+        const panel = document.createElement("div");
+        panel.className = "combo-panel";
+        comboDiv.appendChild(input);
+        comboDiv.appendChild(panel);
+
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "button secondary remove-slot-btn";
+        removeBtn.textContent = "×";
+
+        row.appendChild(comboDiv);
+        row.appendChild(removeBtn);
+        document.getElementById("source-combo-list").appendChild(row);
+
+        const combo = setupCombo(input, panel, initial);
+        const entry = { row, getValue: combo.getValue };
+        removeBtn.addEventListener("click", () => removeSourceRow(entry));
+        sourceRows.push(entry);
+        updateSourceRemoveButtons();
+    }
+
+    function removeSourceRow(entry) {
+        if (sourceRows.length <= 1) return;
+        sourceRows = sourceRows.filter((e) => e !== entry);
+        entry.row.remove();
+        updateSourceRemoveButtons();
+    }
+
+    document
+        .getElementById("add-source-btn")
+        .addEventListener("click", () => addSourceRow(null));
+
+    let destCombo = null;
+
+    function updateOperators(selectedOperator) {
+        const field = document.getElementById("field-select").value;
+        const operatorSelect = document.getElementById("operator-select");
+        operatorSelect.innerHTML = "";
+        FIELD_OPERATORS[field].forEach((op) => {
+            const opt = document.createElement("option");
+            opt.value = op.value;
+            opt.textContent = op.label;
+            if (op.value === selectedOperator) opt.selected = true;
+            operatorSelect.appendChild(opt);
+        });
+        updateValueInputs();
+    }
+
+    function updateValueInputs(value, value2) {
+        const field = document.getElementById("field-select").value;
+        const operator = document.getElementById("operator-select").value;
+        const container = document.getElementById("value-inputs");
+        container.innerHTML = "";
+
+        if (field === "explicit") {
+            const select = document.createElement("select");
+            select.id = "value-input";
+            [
+                ["yes", "Explicit"],
+                ["no", "Not explicit"],
+            ].forEach(([v, label]) => {
+                const opt = document.createElement("option");
+                opt.value = v;
+                opt.textContent = label;
+                if (v === value) opt.selected = true;
+                select.appendChild(opt);
+            });
+            container.appendChild(select);
+            return;
+        }
+
+        const input1 = document.createElement("input");
+        input1.type =
+            field === "release_year" || field === "popularity"
+                ? "number"
+                : "text";
+        input1.id = "value-input";
+        input1.placeholder =
+            field === "release_year"
+                ? "e.g. 2026"
+                : field === "popularity"
+                  ? "0-100"
+                  : "text to match";
+        if (value) input1.value = value;
+        container.appendChild(input1);
+
+        if (field === "release_year" && operator === "between") {
+            const and = document.createElement("span");
+            and.textContent = " and ";
+            container.appendChild(and);
+            const input2 = document.createElement("input");
+            input2.type = "number";
+            input2.id = "value-input-2";
+            input2.placeholder = "e.g. 2027";
+            if (value2) input2.value = value2;
+            container.appendChild(input2);
+        }
+    }
+
+    document
+        .getElementById("field-select")
+        .addEventListener("change", () => updateOperators());
+    document
+        .getElementById("operator-select")
+        .addEventListener("change", () => updateValueInputs());
+
+    document.querySelectorAll('input[name="dest-mode"]').forEach((radio) => {
+        radio.addEventListener("change", () => {
+            const mode = document.querySelector(
+                'input[name="dest-mode"]:checked',
+            ).value;
+            document.getElementById("dest-existing").style.display =
+                mode === "existing" ? "block" : "none";
+            document.getElementById("dest-new").style.display =
+                mode === "new" ? "block" : "none";
+        });
+    });
+
+    async function showPicker(saved) {
+        document.getElementById("configured-view").style.display = "none";
+        document.getElementById("picker-view").style.display = "block";
+        document.getElementById("picker-error").style.display = "none";
+        document.getElementById("cancel-btn").style.display = saved
+            ? "inline-block"
+            : "none";
+
+        document.getElementById("picker-loading").style.display = "block";
+        document.getElementById("save-btn").disabled = true;
+
+        const errorEl = document.getElementById("picker-error");
+        try {
+            await fetchPlaylists();
+        } catch (e) {
+            document.getElementById("picker-loading").style.display = "none";
+            errorEl.textContent =
+                "Failed to load your playlists. Check your connection and try again.";
+            errorEl.style.display = "block";
+            return;
+        }
+        document.getElementById("picker-loading").style.display = "none";
+        document.getElementById("save-btn").disabled = false;
+
+        document.getElementById("source-combo-list").innerHTML = "";
+        sourceRows = [];
+        const sources = saved && saved.sources.length ? saved.sources : [null];
+        sources.forEach((s) => addSourceRow(s));
+
+        document.getElementById("field-select").value = saved
+            ? saved.field
+            : "release_year";
+        updateOperators(saved ? saved.operator : undefined);
+        updateValueInputs(
+            saved ? saved.value : undefined,
+            saved ? saved.value2 : undefined,
+        );
+
+        const destMode = saved ? saved.destMode : "existing";
+        document.querySelector(
+            'input[name="dest-mode"][value="' + destMode + '"]',
+        ).checked = true;
+        document.getElementById("dest-existing").style.display =
+            destMode === "existing" ? "block" : "none";
+        document.getElementById("dest-new").style.display =
+            destMode === "new" ? "block" : "none";
+
+        const destInitial =
+            saved && saved.destPlaylistId
+                ? { id: saved.destPlaylistId, name: saved.destPlaylistName }
+                : null;
+        destCombo = setupCombo(
+            document.getElementById("dest-combo-input"),
+            document.getElementById("dest-combo-panel"),
+            destInitial,
+        );
+        document.getElementById("dest-new-name").value = saved
+            ? saved.destNewName || ""
+            : "";
+    }
+
+    document
+        .getElementById("edit-btn")
+        .addEventListener("click", () => showPicker(getSaved()));
+
+    document.getElementById("cancel-btn").addEventListener("click", () => {
+        const saved = getSaved();
+        if (saved) showConfigured(saved);
+    });
+
+    document.getElementById("save-btn").addEventListener("click", () => {
+        const errorEl = document.getElementById("picker-error");
+        const sources = sourceRows.map((e) => e.getValue());
+
+        if (sources.some((s) => !s.id)) {
+            errorEl.textContent =
+                "Pick a playlist for every slot (or remove empty ones).";
+            errorEl.style.display = "block";
+            return;
+        }
+
+        const field = document.getElementById("field-select").value;
+        const operator = document.getElementById("operator-select").value;
+        const valueInput = document.getElementById("value-input");
+        const value = valueInput.value.trim();
+        const value2Input = document.getElementById("value-input-2");
+        const value2 = value2Input ? value2Input.value.trim() : "";
+
+        if (!value) {
+            errorEl.textContent = "Enter a value for the condition.";
+            errorEl.style.display = "block";
+            return;
+        }
+        if (value2Input && !value2) {
+            errorEl.textContent = 'Enter both values for "is between".';
+            errorEl.style.display = "block";
+            return;
+        }
+
+        const destMode = document.querySelector(
+            'input[name="dest-mode"]:checked',
+        ).value;
+        let destPlaylistId = null,
+            destPlaylistName = null,
+            destNewName = null;
+        if (destMode === "existing") {
+            const destValue = destCombo.getValue();
+            if (!destValue.id) {
+                errorEl.textContent = "Pick a destination playlist.";
+                errorEl.style.display = "block";
+                return;
+            }
+            destPlaylistId = destValue.id;
+            destPlaylistName = destValue.name;
+        } else {
+            destNewName = document.getElementById("dest-new-name").value.trim();
+            if (!destNewName) {
+                errorEl.textContent = "Enter a name for the new playlist.";
+                errorEl.style.display = "block";
+                return;
+            }
+        }
+
+        errorEl.style.display = "none";
+
+        const saved = {
+            sources,
+            field,
+            operator,
+            value,
+            value2,
+            destMode,
+            destPlaylistId,
+            destPlaylistName,
+            destNewName,
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+        showConfigured(saved);
+    });
+
+    const saved = getSaved();
+    if (saved) {
+        showConfigured(saved);
+    } else {
+        showPicker(null);
+    }
+</script>
+{% endif %} {% endblock %}
