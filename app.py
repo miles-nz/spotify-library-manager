@@ -12,6 +12,7 @@ from spotify_client import make_oauth, get_authenticated_client
 from sync import apply_diff, get_target_diff
 import duplicates as duplicates_module
 import playlist_filter as playlist_filter_module
+import playlist_cleanup as playlist_cleanup_module
 
 load_dotenv()
 
@@ -28,6 +29,7 @@ app = Flask(__name__)
 _sync_job = BackgroundJob(["sync", "app"])
 _dup_job = BackgroundJob(["duplicates", "app"])
 _filter_job = BackgroundJob(["playlist_filter", "app"])
+_cleanup_job = BackgroundJob(["playlist_cleanup", "app"])
 
 
 def _credentials_configured() -> bool:
@@ -112,6 +114,24 @@ def _run_playlist_filter_scan(
             "already_in_destination": already_in_destination,
             "similar_versions": similar_versions,
             **destination,
+        }
+
+    return target
+
+
+def _run_playlist_cleanup_scan(
+    playlist_id: str, field: str, operator: str, value: str, value2: str | None
+):
+    def target(cancel_check):
+        sp = get_authenticated_client()
+        playlist_name = sp.playlist(playlist_id, fields="name")["name"]
+        removals = playlist_cleanup_module.find_removals(
+            sp, playlist_id, playlist_name, field, operator, value, value2, cancel_check=cancel_check
+        )
+        return {
+            "playlist_id": playlist_id,
+            "playlist_name": playlist_name,
+            "removals": removals,
         }
 
     return target
@@ -550,6 +570,109 @@ def playlist_filter_apply():
 
     return render_template(
         "playlist_filter_done.html", added=added, skipped=skipped, playlist_name=playlist_name
+    )
+
+
+# --- Playlist Cleanup ---------------------------------------------------
+
+
+@app.route("/playlist-cleanup")
+def playlist_cleanup_picker():
+    if not _credentials_configured():
+        return render_template("playlist_cleanup.html", needs_credentials=True)
+
+    sp = get_authenticated_client()
+    return render_template(
+        "playlist_cleanup.html",
+        needs_credentials=False,
+        logged_in=sp is not None,
+    )
+
+
+@app.route("/playlist-cleanup/scan")
+def playlist_cleanup_scan():
+    if not _credentials_configured():
+        return redirect(url_for("home"))
+
+    sp = get_authenticated_client()
+    if sp is None:
+        return redirect(url_for("login"))
+
+    playlist_id = request.args.get("playlist_id")
+    field = request.args.get("field")
+    operator = request.args.get("operator")
+    value = request.args.get("value")
+    value2 = request.args.get("value2")
+
+    if not playlist_id or not field or not operator or not value:
+        return redirect(url_for("playlist_cleanup_picker"))
+
+    _cleanup_job.start(_run_playlist_cleanup_scan(playlist_id, field, operator, value, value2))
+
+    return render_template(
+        "progress.html",
+        status_url=url_for("playlist_cleanup_scan_status"),
+        cancel_url=url_for("playlist_cleanup_scan_cancel"),
+        result_url=url_for("playlist_cleanup_scan_result"),
+        back_url=url_for("playlist_cleanup_picker"),
+        heading="Scanning playlist…",
+        description="Reading the playlist to find tracks to remove. This can take a few minutes for large playlists.",
+    )
+
+
+@app.route("/playlist-cleanup/scan/status")
+def playlist_cleanup_scan_status():
+    return jsonify(_cleanup_job.status())
+
+
+@app.route("/playlist-cleanup/scan/cancel", methods=["POST"])
+def playlist_cleanup_scan_cancel():
+    _cleanup_job.cancel()
+    return jsonify({"ok": True})
+
+
+@app.route("/playlist-cleanup/scan/result")
+def playlist_cleanup_scan_result():
+    if not _credentials_configured():
+        return redirect(url_for("home"))
+
+    sp = get_authenticated_client()
+    if sp is None:
+        return redirect(url_for("login"))
+
+    result = _cleanup_job.result
+    if result is None:
+        return redirect(url_for("playlist_cleanup_picker"))
+
+    return render_template(
+        "playlist_cleanup_result.html",
+        playlist_name=result["playlist_name"],
+        removals=result["removals"],
+    )
+
+
+@app.route("/playlist-cleanup/remove", methods=["POST"])
+def playlist_cleanup_remove():
+    if not _credentials_configured():
+        return redirect(url_for("home"))
+
+    sp = get_authenticated_client()
+    if sp is None:
+        return redirect(url_for("login"))
+
+    result = _cleanup_job.result
+    if result is None:
+        return redirect(url_for("playlist_cleanup_picker"))
+
+    removal_uris = {r["uri"] for r in result["removals"]}
+    selected_uris = [uri for uri in request.form.getlist("track") if uri in removal_uris]
+
+    playlist_cleanup_module.remove_tracks(sp, result["playlist_id"], selected_uris)
+    playlist_name = result["playlist_name"]
+    _cleanup_job.result = None
+
+    return render_template(
+        "playlist_cleanup_done.html", removed=len(selected_uris), playlist_name=playlist_name
     )
 
 

@@ -1,0 +1,541 @@
+{% extends "base.html" %} {% block title %}Playlist Cleanup - Spotify Library
+Manager{% endblock %} {% block extra_style %} .combo-row { display: flex;
+align-items: flex-start; gap: 0.5rem; margin-bottom: 0.5rem; } .combo {
+position: relative; flex: 1; } .combo-input { font-size: 1rem; padding: 0.5rem
+0.6rem; width: 100%; max-width: 100%; box-sizing: border-box; border: 1px solid
+#ccc; border-radius: 6px; } .combo-input:focus { outline: 2px solid #1db954;
+outline-offset: -1px; } .combo-panel { display: none; position: absolute; top:
+100%; left: 0; right: 0; z-index: 10; background: white; border: 1px solid #ccc;
+border-radius: 6px; margin-top: 0.25rem; max-height: 16rem; overflow-y: auto;
+box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12); } .combo-option { display: flex;
+align-items: center; gap: 0.6rem; padding: 0.5rem 0.6rem; cursor: pointer; }
+.combo-option:hover, .combo-option.highlighted { background: #f0f0f0; }
+.combo-thumb { width: 2rem; height: 2rem; border-radius: 4px; object-fit: cover;
+background: #ddd; flex-shrink: 0; } .combo-thumb.placeholder { display: flex;
+align-items: center; justify-content: center; font-size: 1rem; } .combo-empty {
+padding: 0.5rem 0.6rem; color: #666; } .criteria-row { display: flex;
+flex-wrap: wrap; gap: 0.5rem; align-items: center; } .criteria-row select,
+.criteria-row input[type="text"], .criteria-row input[type="number"] {
+font-size: 1rem; padding: 0.5rem 0.6rem; border: 1px solid #ccc; border-radius:
+6px; } {% endblock %} {% block content %}
+<h1>Playlist Cleanup</h1>
+<p>
+    Pick a playlist and a rule for what to keep. Anything that doesn't match
+    gets removed.
+</p>
+
+{% if needs_credentials %}
+<p class="warning">
+    No Spotify credentials found. Copy <code>.env.example</code> to
+    <code>.env</code> and fill in <code>SPOTIFY_CLIENT_ID</code> and
+    <code>SPOTIFY_CLIENT_SECRET</code>, then restart the app. See the README for
+    how to register a Spotify app.
+</p>
+{% elif not logged_in %}
+<p><a class="button" href="{{ url_for('login') }}">Log in with Spotify</a></p>
+{% else %}
+<div id="configured-view" style="display: none">
+    <p id="configured-playlist"></p>
+    <p id="configured-criteria"></p>
+    <p>
+        <a class="button" id="scan-link" href="#">Find Tracks to Remove</a>
+        <button class="button secondary" id="edit-btn" type="button">
+            Edit
+        </button>
+    </p>
+</div>
+
+<div id="picker-view" style="display: none">
+    <fieldset>
+        <legend>Playlist</legend>
+        <div class="combo" id="playlist-combo">
+            <input
+                type="text"
+                id="playlist-combo-input"
+                class="combo-input"
+                placeholder="Search your playlists…"
+                autocomplete="off"
+            />
+            <div class="combo-panel" id="playlist-combo-panel"></div>
+        </div>
+    </fieldset>
+
+    <fieldset>
+        <legend>Keep tracks where</legend>
+        <div class="criteria-row">
+            <select id="field-select">
+                <option value="added_date">Added date</option>
+                <option value="release_year">Release year</option>
+                <option value="popularity">Popularity (0-100)</option>
+                <option value="explicit">Explicit</option>
+                <option value="artist">Artist name</option>
+                <option value="track_name">Track name</option>
+            </select>
+            <select id="operator-select"></select>
+            <span id="value-inputs"></span>
+        </div>
+        <p class="hint">
+            Everything in the playlist that doesn't match this rule will be
+            removed.
+        </p>
+    </fieldset>
+
+    <p id="picker-loading"><span class="spinner"></span>Loading playlists…</p>
+    <p class="warning" id="picker-error" style="display: none"></p>
+    <p>
+        <button class="button" id="save-btn" type="button">Save</button>
+        <button
+            class="button secondary"
+            id="cancel-btn"
+            type="button"
+            style="display: none"
+        >
+            Cancel
+        </button>
+    </p>
+</div>
+
+<script>
+    const STORAGE_KEY = "spotifyLibraryManager.playlistCleanup";
+
+    const FIELD_OPERATORS = {
+        added_date: [
+            { value: "within_last", label: "was added within the last" },
+            { value: "older_than", label: "was added more than … ago" },
+        ],
+        release_year: [
+            { value: "is", label: "is" },
+            { value: "before", label: "is before" },
+            { value: "after", label: "is after" },
+            { value: "between", label: "is between" },
+        ],
+        popularity: [
+            { value: "at_least", label: "is at least" },
+            { value: "at_most", label: "is at most" },
+        ],
+        explicit: [{ value: "is", label: "is" }],
+        artist: [{ value: "contains", label: "contains" }],
+        track_name: [{ value: "contains", label: "contains" }],
+    };
+    const FIELD_LABELS = {
+        added_date: "Added date",
+        release_year: "Release year",
+        popularity: "Popularity",
+        explicit: "Explicit",
+        artist: "Artist name",
+        track_name: "Track name",
+    };
+    const OPERATOR_LABELS = {
+        within_last: "was added within the last",
+        older_than: "was added more than … ago",
+        is: "is",
+        before: "is before",
+        after: "is after",
+        between: "is between",
+        at_least: "is at least",
+        at_most: "is at most",
+        contains: "contains",
+    };
+    const UNIT_LABELS = { days: "day(s)", weeks: "week(s)", months: "month(s)" };
+
+    function getSaved() {
+        try {
+            const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
+            return parsed && parsed.playlistId ? parsed : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function describeCriterion(saved) {
+        if (saved.field === "added_date") {
+            const opLabel =
+                saved.operator === "within_last"
+                    ? "was added within the last"
+                    : "was added more than";
+            const suffix = saved.operator === "within_last" ? "" : " ago";
+            return (
+                opLabel +
+                " " +
+                saved.value +
+                " " +
+                (UNIT_LABELS[saved.value2] || saved.value2) +
+                suffix
+            );
+        }
+        let desc =
+            FIELD_LABELS[saved.field] +
+            " " +
+            OPERATOR_LABELS[saved.operator] +
+            " ";
+        if (saved.field === "explicit") {
+            desc += saved.value === "yes" ? "yes" : "no";
+        } else if (saved.operator === "between") {
+            desc += saved.value + " and " + saved.value2;
+        } else {
+            desc += '"' + saved.value + '"';
+        }
+        return desc;
+    }
+
+    function showConfigured(saved) {
+        document.getElementById("picker-view").style.display = "none";
+        document.getElementById("configured-view").style.display = "block";
+
+        document.getElementById("configured-playlist").textContent =
+            "Playlist: " + saved.playlistName;
+        document.getElementById("configured-criteria").textContent =
+            "Keep tracks where " + describeCriterion(saved);
+
+        const params = new URLSearchParams();
+        params.set("playlist_id", saved.playlistId);
+        params.set("field", saved.field);
+        params.set("operator", saved.operator);
+        params.set("value", saved.value);
+        params.set("value2", saved.value2 || "");
+        document.getElementById("scan-link").href =
+            "{{ url_for('playlist_cleanup_scan') }}?" + params.toString();
+    }
+
+    let playlistsCache = null;
+
+    async function fetchPlaylists() {
+        if (playlistsCache) return playlistsCache;
+        const resp = await fetch("{{ url_for('api_playlists') }}");
+        if (resp.status === 401) {
+            window.location = "{{ url_for('login') }}";
+            return [];
+        }
+        playlistsCache = await resp.json();
+        return playlistsCache;
+    }
+
+    function setupCombo(input, panel, initial) {
+        const state = {
+            id: initial ? initial.id : null,
+            name: initial ? initial.name : null,
+            filtered: [],
+            highlighted: -1,
+        };
+        input.value = state.name || "";
+
+        function renderPanel() {
+            panel.innerHTML = "";
+            if (state.filtered.length === 0) {
+                const empty = document.createElement("div");
+                empty.className = "combo-empty";
+                empty.textContent = "No playlists match.";
+                panel.appendChild(empty);
+                return;
+            }
+            state.filtered.forEach((p, idx) => {
+                const opt = document.createElement("div");
+                opt.className =
+                    "combo-option" +
+                    (idx === state.highlighted ? " highlighted" : "");
+                if (p.image_url) {
+                    const img = document.createElement("img");
+                    img.className = "combo-thumb";
+                    img.src = p.image_url;
+                    img.alt = "";
+                    opt.appendChild(img);
+                } else {
+                    const placeholder = document.createElement("div");
+                    placeholder.className = "combo-thumb placeholder";
+                    placeholder.textContent = "🎵";
+                    opt.appendChild(placeholder);
+                }
+                const label = document.createElement("span");
+                label.textContent = p.name;
+                opt.appendChild(label);
+                opt.addEventListener("mousedown", (e) => {
+                    e.preventDefault();
+                    select(p);
+                });
+                panel.appendChild(opt);
+            });
+        }
+
+        function filter(query) {
+            const all = playlistsCache || [];
+            const q = query.trim().toLowerCase();
+            state.filtered = q
+                ? all.filter((p) => p.name.toLowerCase().includes(q))
+                : all;
+            state.highlighted = -1;
+            renderPanel();
+        }
+
+        function open() {
+            panel.style.display = "block";
+            filter(input.value === (state.name || "") ? "" : input.value);
+        }
+
+        function close() {
+            panel.style.display = "none";
+        }
+
+        function select(p) {
+            state.id = p.id;
+            state.name = p.name;
+            input.value = p.name;
+            close();
+        }
+
+        input.addEventListener("focus", () => {
+            input.select();
+            open();
+        });
+        input.addEventListener("input", () => {
+            filter(input.value);
+            panel.style.display = "block";
+        });
+        input.addEventListener("blur", () => {
+            setTimeout(() => {
+                close();
+                input.value = state.name || "";
+            }, 100);
+        });
+        input.addEventListener("keydown", (e) => {
+            if (e.key === "ArrowDown") {
+                e.preventDefault();
+                if (panel.style.display !== "block") {
+                    open();
+                    return;
+                }
+                state.highlighted = Math.min(
+                    state.highlighted + 1,
+                    state.filtered.length - 1,
+                );
+                renderPanel();
+            } else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                state.highlighted = Math.max(state.highlighted - 1, 0);
+                renderPanel();
+            } else if (e.key === "Enter") {
+                e.preventDefault();
+                if (
+                    state.highlighted >= 0 &&
+                    state.filtered[state.highlighted]
+                ) {
+                    select(state.filtered[state.highlighted]);
+                }
+            } else if (e.key === "Escape") {
+                close();
+                input.value = state.name || "";
+                input.blur();
+            }
+        });
+
+        return {
+            getValue: () => ({ id: state.id, name: state.name }),
+            setValue: (id, name) => {
+                state.id = id;
+                state.name = name;
+                input.value = name || "";
+            },
+        };
+    }
+
+    let playlistCombo = null;
+
+    function updateOperators(selectedOperator) {
+        const field = document.getElementById("field-select").value;
+        const operatorSelect = document.getElementById("operator-select");
+        operatorSelect.innerHTML = "";
+        FIELD_OPERATORS[field].forEach((op) => {
+            const opt = document.createElement("option");
+            opt.value = op.value;
+            opt.textContent = op.label;
+            if (op.value === selectedOperator) opt.selected = true;
+            operatorSelect.appendChild(opt);
+        });
+        updateValueInputs();
+    }
+
+    function updateValueInputs(value, value2) {
+        const field = document.getElementById("field-select").value;
+        const operator = document.getElementById("operator-select").value;
+        const container = document.getElementById("value-inputs");
+        container.innerHTML = "";
+
+        if (field === "added_date") {
+            const input1 = document.createElement("input");
+            input1.type = "number";
+            input1.min = "1";
+            input1.id = "value-input";
+            input1.style.width = "5rem";
+            input1.value = value || "1";
+            container.appendChild(input1);
+
+            const select = document.createElement("select");
+            select.id = "value-input-2";
+            [
+                ["days", "day(s)"],
+                ["weeks", "week(s)"],
+                ["months", "month(s)"],
+            ].forEach(([v, label]) => {
+                const opt = document.createElement("option");
+                opt.value = v;
+                opt.textContent = label;
+                if (v === (value2 || "months")) opt.selected = true;
+                select.appendChild(opt);
+            });
+            container.appendChild(select);
+            return;
+        }
+
+        if (field === "explicit") {
+            const select = document.createElement("select");
+            select.id = "value-input";
+            [
+                ["yes", "Explicit"],
+                ["no", "Not explicit"],
+            ].forEach(([v, label]) => {
+                const opt = document.createElement("option");
+                opt.value = v;
+                opt.textContent = label;
+                if (v === value) opt.selected = true;
+                select.appendChild(opt);
+            });
+            container.appendChild(select);
+            return;
+        }
+
+        const input1 = document.createElement("input");
+        input1.type =
+            field === "release_year" || field === "popularity"
+                ? "number"
+                : "text";
+        input1.id = "value-input";
+        input1.placeholder =
+            field === "release_year"
+                ? "e.g. 2026"
+                : field === "popularity"
+                  ? "0-100"
+                  : "text to match";
+        if (value) input1.value = value;
+        container.appendChild(input1);
+
+        if (field === "release_year" && operator === "between") {
+            const and = document.createElement("span");
+            and.textContent = " and ";
+            container.appendChild(and);
+            const input2 = document.createElement("input");
+            input2.type = "number";
+            input2.id = "value-input-2";
+            input2.placeholder = "e.g. 2027";
+            if (value2) input2.value = value2;
+            container.appendChild(input2);
+        }
+    }
+
+    document
+        .getElementById("field-select")
+        .addEventListener("change", () => updateOperators());
+    document
+        .getElementById("operator-select")
+        .addEventListener("change", () => updateValueInputs());
+
+    async function showPicker(saved) {
+        document.getElementById("configured-view").style.display = "none";
+        document.getElementById("picker-view").style.display = "block";
+        document.getElementById("picker-error").style.display = "none";
+        document.getElementById("cancel-btn").style.display = saved
+            ? "inline-block"
+            : "none";
+
+        document.getElementById("picker-loading").style.display = "block";
+        document.getElementById("save-btn").disabled = true;
+
+        const errorEl = document.getElementById("picker-error");
+        try {
+            await fetchPlaylists();
+        } catch (e) {
+            document.getElementById("picker-loading").style.display = "none";
+            errorEl.textContent =
+                "Failed to load your playlists. Check your connection and try again.";
+            errorEl.style.display = "block";
+            return;
+        }
+        document.getElementById("picker-loading").style.display = "none";
+        document.getElementById("save-btn").disabled = false;
+
+        const playlistInitial = saved
+            ? { id: saved.playlistId, name: saved.playlistName }
+            : null;
+        playlistCombo = setupCombo(
+            document.getElementById("playlist-combo-input"),
+            document.getElementById("playlist-combo-panel"),
+            playlistInitial,
+        );
+
+        document.getElementById("field-select").value = saved
+            ? saved.field
+            : "added_date";
+        updateOperators(saved ? saved.operator : "within_last");
+        updateValueInputs(
+            saved ? saved.value : "1",
+            saved ? saved.value2 : "months",
+        );
+    }
+
+    document
+        .getElementById("edit-btn")
+        .addEventListener("click", () => showPicker(getSaved()));
+
+    document.getElementById("cancel-btn").addEventListener("click", () => {
+        const saved = getSaved();
+        if (saved) showConfigured(saved);
+    });
+
+    document.getElementById("save-btn").addEventListener("click", () => {
+        const errorEl = document.getElementById("picker-error");
+        const playlistValue = playlistCombo.getValue();
+
+        if (!playlistValue.id) {
+            errorEl.textContent = "Pick a playlist.";
+            errorEl.style.display = "block";
+            return;
+        }
+
+        const field = document.getElementById("field-select").value;
+        const operator = document.getElementById("operator-select").value;
+        const valueInput = document.getElementById("value-input");
+        const value = valueInput.value.trim();
+        const value2Input = document.getElementById("value-input-2");
+        const value2 = value2Input ? value2Input.value.trim() : "";
+
+        if (!value) {
+            errorEl.textContent = "Enter a value for the condition.";
+            errorEl.style.display = "block";
+            return;
+        }
+        if (value2Input && !value2) {
+            errorEl.textContent = "Fill in both parts of the condition.";
+            errorEl.style.display = "block";
+            return;
+        }
+
+        errorEl.style.display = "none";
+
+        const saved = {
+            playlistId: playlistValue.id,
+            playlistName: playlistValue.name,
+            field,
+            operator,
+            value,
+            value2,
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+        showConfigured(saved);
+    });
+
+    const saved = getSaved();
+    if (saved) {
+        showConfigured(saved);
+    } else {
+        showPicker(null);
+    }
+</script>
+{% endif %} {% endblock %}

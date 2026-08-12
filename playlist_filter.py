@@ -45,7 +45,7 @@ def get_playlist_tracks(
     results = sp.playlist_items(
         playlist_id,
         fields=(
-            "items(track(uri,name,artists,explicit,popularity,is_local,"
+            "items(added_at,track(uri,name,artists,explicit,popularity,is_local,"
             "album(release_date))),next"
         ),
         additional_types=["track"],
@@ -62,6 +62,7 @@ def get_playlist_tracks(
                         "explicit": bool(track.get("explicit")),
                         "popularity": track.get("popularity"),
                         "release_year": _parse_year((track.get("album") or {}).get("release_date")),
+                        "added_at": item.get("added_at"),
                     }
                 )
         logger.info("playlist '%s': %d tracks fetched so far", playlist_name, len(tracks))
@@ -170,7 +171,7 @@ def get_playlist_track_details(
     sp: Spotify, playlist_id: str, cancel_check: CancelCheck | None = None
 ) -> list[dict]:
     """Like get_playlist_track_uris but also fetches name/artists, for the
-    "check for similar versions" comparison — one extra field, no extra
+    "check for similar versions" comparison - one extra field, no extra
     request, since we're already paging through the whole playlist."""
     tracks: list[dict] = []
     results = sp.playlist_items(
@@ -210,7 +211,7 @@ def find_similar_versions(
 ) -> dict[str, list[dict]]:
     """For each match, finds tracks already in the destination that share the
     same primary artist and normalized title (version qualifiers like
-    "(Single Version)"/"- Remastered 2011" stripped) but a different uri —
+    "(Single Version)"/"- Remastered 2011" stripped) but a different uri -
     i.e. likely a different version of the same song. Only matches with at
     least one hit are included: {match_uri: [{"uri", "name", "artists"}, ...]}
     """

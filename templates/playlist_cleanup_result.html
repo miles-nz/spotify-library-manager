@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Tracks to Remove — Spotify Library Manager{% endblock %}
+{% block extra_style %}
+    .match { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0; border-bottom: 1px solid #eee; flex-wrap: wrap; }
+    .match:last-child { border-bottom: none; }
+    .added-date { color: #666; font-size: 0.85rem; }
+{% endblock %}
+{% block content %}
+  <h1>Tracks to Remove</h1>
+
+  {% if not removals %}
+    <p class="hint">Everything in "{{ playlist_name }}" already matches your rule — nothing to remove.</p>
+    <p><a class="button" href="{{ url_for('playlist_cleanup_picker') }}">Back</a></p>
+  {% else %}
+    <p>
+      Found {{ removals|length }} track{{ 's' if removals|length != 1 else '' }} in
+      "{{ playlist_name }}" that {{ "don't" if removals|length != 1 else "doesn't" }} match your rule.
+      Uncheck any you want to keep.
+    </p>
+
+    <form method="post" action="{{ url_for('playlist_cleanup_remove') }}">
+      <div id="matches-list">
+        {% for track in removals %}
+          <label class="match">
+            <input type="checkbox" name="track" value="{{ track.uri }}" checked>
+            <span>{{ track.artists }} – {{ track.name }}</span>
+            <span class="added-date">added {{ track.added_at[:10] if track.added_at else 'unknown date' }}</span>
+          </label>
+        {% endfor %}
+      </div>
+
+      <p style="margin-top: 1.5rem;">
+        <button class="button" type="submit">Remove selected</button>
+        <a class="button secondary" href="{{ url_for('playlist_cleanup_picker') }}">Cancel</a>
+      </p>
+    </form>
+  {% endif %}
+{% endblock %}

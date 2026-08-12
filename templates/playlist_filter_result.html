@@ -1,87 +1,95 @@
-{% extends "base.html" %}
-{% block title %}Matches — Spotify Library Manager{% endblock %}
-{% block extra_style %}
-    .match { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0; border-bottom: 1px solid #eee; flex-wrap: wrap; }
-    .match:last-child { border-bottom: none; }
-    .version-warning { display: none; color: #b45309; font-size: 0.85rem; flex-basis: 100%; margin-left: 1.6rem; }
-    #matches-list.show-version-warnings .version-warning { display: block; }
-    #version-check-summary { color: #b45309; }
-{% endblock %}
-{% block content %}
-  <h1>Matches</h1>
+{% extends "base.html" %} {% block title %}Matches - Spotify Library Manager{%
+endblock %} {% block extra_style %} .match { display: flex; align-items: center;
+gap: 0.5rem; padding: 0.4rem 0; border-bottom: 1px solid #eee; flex-wrap: wrap;
+} .match:last-child { border-bottom: none; } .version-warning { display: none;
+color: #b45309; font-size: 0.85rem; flex-basis: 100%; margin-left: 1.6rem; }
+#matches-list.show-version-warnings .version-warning { display: block; }
+#version-check-summary { color: #b45309; } {% endblock %} {% block content %}
+<h1>Matches</h1>
 
-  {% if not matches %}
-    {% if already_in_destination %}
-      <p class="hint">
-        {{ already_in_destination }} track{{ 's' if already_in_destination != 1 else '' }} matched
-        your condition, but {{ 'they' if already_in_destination != 1 else 'it' }} already
-        {{ 'exist' if already_in_destination != 1 else 'exists' }} in "{{ destination_label }}" —
-        nothing new to add.
-      </p>
-    {% else %}
-      <p class="hint">No tracks matched that condition.</p>
-    {% endif %}
-    <p><a class="button" href="{{ url_for('playlist_filter_picker') }}">Back</a></p>
-  {% else %}
-    <p>
-      {% if destination_mode == 'new' %}
-        Found {{ matches|length }} matching track{{ 's' if matches|length != 1 else '' }}.
-        These will be added to a new playlist called "{{ destination_label }}".
-      {% else %}
-        Found {{ matches|length }} track{{ 's' if matches|length != 1 else '' }} matching your
-        condition that {{ "aren't" if matches|length != 1 else "isn't" }} already in
-        "{{ destination_label }}"{% if already_in_destination %} ({{ already_in_destination }}
-        matching track{{ 's' if already_in_destination != 1 else '' }} already there, excluded){% endif %}.
-      {% endif %}
-      Uncheck any you don't want to add.
-    </p>
+{% if not matches %} {% if already_in_destination %}
+<p class="hint">
+    {{ already_in_destination }} track{{ 's' if already_in_destination != 1 else
+    '' }} matched your condition, but {{ 'they' if already_in_destination != 1
+    else 'it' }} already {{ 'exist' if already_in_destination != 1 else 'exists'
+    }} in "{{ destination_label }}" - nothing new to add.
+</p>
+{% else %}
+<p class="hint">No tracks matched that condition.</p>
+{% endif %}
+<p><a class="button" href="{{ url_for('playlist_filter_picker') }}">Back</a></p>
+{% else %}
+<p>
+    {% if destination_mode == 'new' %} Found {{ matches|length }} matching
+    track{{ 's' if matches|length != 1 else '' }}. These will be added to a new
+    playlist called "{{ destination_label }}". {% else %} Found {{
+    matches|length }} track{{ 's' if matches|length != 1 else '' }} matching
+    your condition that {{ "aren't" if matches|length != 1 else "isn't" }}
+    already in "{{ destination_label }}"{% if already_in_destination %} ({{
+    already_in_destination }} matching track{{ 's' if already_in_destination !=
+    1 else '' }} already there, excluded){% endif %}. {% endif %} Uncheck any
+    you don't want to add.
+</p>
 
-    {% if destination_mode == 'existing' %}
-      <p>
-        <button class="button secondary" id="check-versions-btn" type="button">
-          Check for similar versions already in "{{ destination_label }}"
-        </button>
-      </p>
-      <p id="version-check-summary" style="display: none;"></p>
-    {% endif %}
+{% if destination_mode == 'existing' %}
+<p>
+    <button class="button secondary" id="check-versions-btn" type="button">
+        Check for similar versions already in "{{ destination_label }}"
+    </button>
+</p>
+<p id="version-check-summary" style="display: none"></p>
+{% endif %}
 
-    <form method="post" action="{{ url_for('playlist_filter_apply') }}">
-      <div id="matches-list">
+<form method="post" action="{{ url_for('playlist_filter_apply') }}">
+    <div id="matches-list">
         {% for track in matches %}
-          <label class="match">
-            <input type="checkbox" name="track" value="{{ track.uri }}" checked>
+        <label class="match">
+            <input
+                type="checkbox"
+                name="track"
+                value="{{ track.uri }}"
+                checked
+            />
             <span>{{ track.artists }} – {{ track.name }}</span>
             {% if track.uri in similar_versions %}
-              <span class="version-warning">
-                ⚠ possibly already in "{{ destination_label }}" as a different version:
-                {% for candidate in similar_versions[track.uri] %}
-                  "{{ candidate.artists }} – {{ candidate.name }}"{% if not loop.last %}, {% endif %}
-                {% endfor %}
-              </span>
+            <span class="version-warning">
+                ⚠ possibly already in "{{ destination_label }}" as a different
+                version: {% for candidate in similar_versions[track.uri] %} "{{
+                candidate.artists }} – {{ candidate.name }}"{% if not loop.last
+                %}, {% endif %} {% endfor %}
+            </span>
             {% endif %}
-          </label>
+        </label>
         {% endfor %}
-      </div>
+    </div>
 
-      <p style="margin-top: 1.5rem;">
+    <p style="margin-top: 1.5rem">
         <button class="button" type="submit">Add to playlist</button>
-        <a class="button secondary" href="{{ url_for('playlist_filter_picker') }}">Cancel</a>
-      </p>
-    </form>
+        <a
+            class="button secondary"
+            href="{{ url_for('playlist_filter_picker') }}"
+            >Cancel</a
+        >
+    </p>
+</form>
 
-    {% if destination_mode == 'existing' %}
-      <script>
-        document.getElementById('check-versions-btn').addEventListener('click', () => {
-          const list = document.getElementById('matches-list');
-          list.classList.add('show-version-warnings');
-          const count = list.querySelectorAll('.version-warning').length;
-          const summary = document.getElementById('version-check-summary');
-          summary.style.display = 'block';
-          summary.textContent = count === 0
-            ? 'No similar versions found already in "{{ destination_label }}".'
-            : count + ' track' + (count !== 1 ? 's' : '') + ' may already exist as a different version — check the warnings below before adding.';
+{% if destination_mode == 'existing' %}
+<script>
+    document
+        .getElementById("check-versions-btn")
+        .addEventListener("click", () => {
+            const list = document.getElementById("matches-list");
+            list.classList.add("show-version-warnings");
+            const count = list.querySelectorAll(".version-warning").length;
+            const summary = document.getElementById("version-check-summary");
+            summary.style.display = "block";
+            summary.textContent =
+                count === 0
+                    ? 'No similar versions found already in "{{ destination_label }}".'
+                    : count +
+                      " track" +
+                      (count !== 1 ? "s" : "") +
+                      " may already exist as a different version - check the warnings below before adding.";
         });
-      </script>
-    {% endif %}
-  {% endif %}
-{% endblock %}
+</script>
+{% endif %} {% endif %} {% endblock %}
