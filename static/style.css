@@ -1,5 +1,12 @@
 /* Base page chrome, shared by every template. */
-body { font-family: sans-serif; max-width: 40rem; margin: 4rem auto; padding: 0 1rem; }
+body {
+  font-family: sans-serif; max-width: 40rem; margin: 4rem auto; padding: 0 1rem;
+  overflow-wrap: break-word;
+}
+input, select, textarea { font-size: 1rem; font-family: inherit; }
+@media (max-width: 600px) {
+  body { margin: 1.5rem auto; }
+}
 a.button, button.button {
   font-size: 1rem; padding: 0.6rem 1.2rem; border-radius: 6px; border: none;
   background: #1db954; color: white; cursor: pointer; text-decoration: none;
