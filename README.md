@@ -55,3 +55,23 @@ functions. Currently available:
     it finishes you get a preview of the changes (tracks to add/remove) -
     review it and select what you actually want, then apply to make the
     change in Spotify.
+
+## Deploying to Railway
+
+The app ships with a `Procfile` (`gunicorn app:app --bind 0.0.0.0:$PORT`), so
+Railway can build and run it with no extra config.
+
+1. In Railway, create a new project from this GitHub repo.
+2. Under the service's **Variables**, add `SPOTIFY_CLIENT_ID`,
+   `SPOTIFY_CLIENT_SECRET`, and `SPOTIFY_REDIRECT_URI` (set the redirect URI
+   to `https://<your-railway-domain>/callback` - you'll get the domain in
+   the next step, so come back and update this after).
+3. Under **Settings > Networking**, click **Generate Domain** to get a
+   public `*.up.railway.app` URL.
+4. Update `SPOTIFY_REDIRECT_URI` in Railway's variables to
+   `https://<that-domain>/callback`, and add the same redirect URI to the
+   app in the [Spotify developer dashboard](https://developer.spotify.com/dashboard)
+   (Settings > Redirect URIs) - it must match exactly.
+5. Keep the service at 1 replica - job progress and the OAuth token cache
+   are kept in memory/on local disk per instance, so multiple replicas
+   would see inconsistent state.

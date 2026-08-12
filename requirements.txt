@@ -1,3 +1,4 @@
 flask
 spotipy
 python-dotenv
+gunicorn
