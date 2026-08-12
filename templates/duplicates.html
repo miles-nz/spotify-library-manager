@@ -1,21 +1,6 @@
-{% extends "base.html" %} {% block title %}Duplicate Finder - Spotify Library
-Manager{% endblock %} {% block extra_style %} .combo-row { display: flex;
-align-items: flex-start; gap: 0.5rem; margin-bottom: 0.5rem; } .combo {
-position: relative; flex: 1; } .combo-input { font-size: 1rem; padding: 0.5rem
-0.6rem; width: 100%; max-width: 100%; box-sizing: border-box; border: 1px solid
-#ccc; border-radius: 6px; } .combo-input:focus { outline: 2px solid #1db954;
-outline-offset: -1px; } .combo-panel { display: none; position: absolute; top:
-100%; left: 0; right: 0; z-index: 10; background: white; border: 1px solid #ccc;
-border-radius: 6px; margin-top: 0.25rem; max-height: 16rem; overflow-y: auto;
-box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12); } .combo-option { display: flex;
-align-items: center; gap: 0.6rem; padding: 0.5rem 0.6rem; cursor: pointer; }
-.combo-option:hover, .combo-option.highlighted { background: #f0f0f0; }
-.combo-thumb { width: 2rem; height: 2rem; border-radius: 4px; object-fit: cover;
-background: #ddd; flex-shrink: 0; } .combo-thumb.placeholder { display: flex;
-align-items: center; justify-content: center; font-size: 1rem; } .combo-empty {
-padding: 0.5rem 0.6rem; color: #666; } .remove-slot-btn { padding: 0.5rem
-0.75rem !important; margin-right: 0 !important; } {% endblock %} {% block
-content %}
+{% extends "base.html" %}
+{% block title %}Duplicate Finder - Spotify Library Manager{% endblock %}
+{% block content %}
 <h1>Duplicate Finder</h1>
 <p>
     Finds tracks that appear in more than one of the playlists you pick, so you
@@ -68,6 +53,7 @@ content %}
     </p>
 </div>
 
+<script src="{{ url_for('static', filename='playlist_picker.js') }}"></script>
 <script>
     const STORAGE_KEY = "spotifyLibraryManager.duplicatePlaylists";
 
@@ -99,203 +85,14 @@ content %}
             "{{ url_for('duplicates_scan') }}?" + params;
     }
 
-    let playlistsCache = null;
-
-    async function fetchPlaylists() {
-        if (playlistsCache) return playlistsCache;
-        const resp = await fetch("{{ url_for('api_playlists') }}");
-        if (resp.status === 401) {
-            window.location = "{{ url_for('login') }}";
-            return [];
-        }
-        playlistsCache = await resp.json();
-        return playlistsCache;
-    }
-
-    // A small searchable combobox: text input + filtered dropdown panel
-    // showing each playlist's cover art. Rows are created dynamically
-    // since the number of playlists is variable here.
-    function createComboRow(initial) {
-        const row = document.createElement("div");
-        row.className = "combo-row";
-
-        const comboDiv = document.createElement("div");
-        comboDiv.className = "combo";
-        const input = document.createElement("input");
-        input.type = "text";
-        input.className = "combo-input";
-        input.placeholder = "Search your playlists…";
-        input.autocomplete = "off";
-        const panel = document.createElement("div");
-        panel.className = "combo-panel";
-        comboDiv.appendChild(input);
-        comboDiv.appendChild(panel);
-
-        const removeBtn = document.createElement("button");
-        removeBtn.type = "button";
-        removeBtn.className = "button secondary remove-slot-btn";
-        removeBtn.textContent = "×";
-
-        row.appendChild(comboDiv);
-        row.appendChild(removeBtn);
-        document.getElementById("combo-list").appendChild(row);
-
-        const state = {
-            id: initial ? initial.id : null,
-            name: initial ? initial.name : null,
-            filtered: [],
-            highlighted: -1,
-        };
-        input.value = state.name || "";
-
-        function renderPanel() {
-            panel.innerHTML = "";
-            if (state.filtered.length === 0) {
-                const empty = document.createElement("div");
-                empty.className = "combo-empty";
-                empty.textContent = "No playlists match.";
-                panel.appendChild(empty);
-                return;
-            }
-            state.filtered.forEach((p, idx) => {
-                const opt = document.createElement("div");
-                opt.className =
-                    "combo-option" +
-                    (idx === state.highlighted ? " highlighted" : "");
-
-                if (p.image_url) {
-                    const img = document.createElement("img");
-                    img.className = "combo-thumb";
-                    img.src = p.image_url;
-                    img.alt = "";
-                    opt.appendChild(img);
-                } else {
-                    const placeholder = document.createElement("div");
-                    placeholder.className = "combo-thumb placeholder";
-                    placeholder.textContent = "🎵";
-                    opt.appendChild(placeholder);
-                }
-
-                const label = document.createElement("span");
-                label.textContent = p.name;
-                opt.appendChild(label);
-
-                opt.addEventListener("mousedown", (e) => {
-                    e.preventDefault();
-                    select(p);
-                });
-
-                panel.appendChild(opt);
-            });
-        }
-
-        function filter(query) {
-            const all = playlistsCache || [];
-            const q = query.trim().toLowerCase();
-            state.filtered = q
-                ? all.filter((p) => p.name.toLowerCase().includes(q))
-                : all;
-            state.highlighted = -1;
-            renderPanel();
-        }
-
-        function open() {
-            panel.style.display = "block";
-            filter(input.value === (state.name || "") ? "" : input.value);
-        }
-
-        function close() {
-            panel.style.display = "none";
-        }
-
-        function select(p) {
-            state.id = p.id;
-            state.name = p.name;
-            input.value = p.name;
-            close();
-        }
-
-        input.addEventListener("focus", () => {
-            input.select();
-            open();
-        });
-
-        input.addEventListener("input", () => {
-            filter(input.value);
-            panel.style.display = "block";
-        });
-
-        input.addEventListener("blur", () => {
-            setTimeout(() => {
-                close();
-                input.value = state.name || "";
-            }, 100);
-        });
-
-        input.addEventListener("keydown", (e) => {
-            if (e.key === "ArrowDown") {
-                e.preventDefault();
-                if (panel.style.display !== "block") {
-                    open();
-                    return;
-                }
-                state.highlighted = Math.min(
-                    state.highlighted + 1,
-                    state.filtered.length - 1,
-                );
-                renderPanel();
-            } else if (e.key === "ArrowUp") {
-                e.preventDefault();
-                state.highlighted = Math.max(state.highlighted - 1, 0);
-                renderPanel();
-            } else if (e.key === "Enter") {
-                e.preventDefault();
-                if (
-                    state.highlighted >= 0 &&
-                    state.filtered[state.highlighted]
-                ) {
-                    select(state.filtered[state.highlighted]);
-                }
-            } else if (e.key === "Escape") {
-                close();
-                input.value = state.name || "";
-                input.blur();
-            }
-        });
-
-        const entry = {
-            row,
-            getValue: () => ({ id: state.id, name: state.name }),
-        };
-        removeBtn.addEventListener("click", () => removeComboRow(entry));
-        return entry;
-    }
-
-    let comboRows = [];
-
-    function updateRemoveButtonsState() {
-        const disable = comboRows.length <= 2;
-        comboRows.forEach((entry) => {
-            entry.row.querySelector(".remove-slot-btn").disabled = disable;
-        });
-    }
-
-    function addComboRow(initial) {
-        const entry = createComboRow(initial);
-        comboRows.push(entry);
-        updateRemoveButtonsState();
-    }
-
-    function removeComboRow(entry) {
-        if (comboRows.length <= 2) return;
-        comboRows = comboRows.filter((e) => e !== entry);
-        entry.row.remove();
-        updateRemoveButtonsState();
-    }
+    const rowManager = createComboRowManager(
+        document.getElementById("combo-list"),
+        2,
+    );
 
     document
         .getElementById("add-slot-btn")
-        .addEventListener("click", () => addComboRow(null));
+        .addEventListener("click", () => rowManager.addRow(null));
 
     async function showPicker(saved) {
         document.getElementById("configured-view").style.display = "none";
@@ -311,7 +108,10 @@ content %}
 
         const errorEl = document.getElementById("picker-error");
         try {
-            await fetchPlaylists();
+            await fetchPlaylists(
+                "{{ url_for('api_playlists') }}",
+                "{{ url_for('login') }}",
+            );
         } catch (e) {
             document.getElementById("picker-loading").style.display = "none";
             errorEl.textContent =
@@ -324,10 +124,8 @@ content %}
         document.getElementById("picker-selects").style.display = "block";
         document.getElementById("save-btn").disabled = false;
 
-        document.getElementById("combo-list").innerHTML = "";
-        comboRows = [];
         const initialValues = saved && saved.length >= 2 ? saved : [null, null];
-        initialValues.forEach((v) => addComboRow(v));
+        rowManager.reset(initialValues);
     }
 
     document
@@ -340,7 +138,7 @@ content %}
     });
 
     document.getElementById("save-btn").addEventListener("click", () => {
-        const values = comboRows.map((e) => e.getValue());
+        const values = rowManager.getValues();
         const errorEl = document.getElementById("picker-error");
 
         if (values.some((v) => !v.id)) {
