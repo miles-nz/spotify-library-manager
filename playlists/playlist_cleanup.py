@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
 
 from spotipy import Spotify
 
@@ -12,42 +11,9 @@ REMOVE_BATCH_SIZE = 100
 
 logger = logging.getLogger(__name__)
 
-FIELD_OPERATORS = {
-    "added_date": ["within_last", "older_than"],
-    **playlist_filter.FIELD_OPERATORS,
-}
+FIELD_OPERATORS = playlist_filter.FIELD_OPERATORS
 
-_UNIT_DAYS = {"days": 1, "weeks": 7, "months": 30}
-
-
-def _cutoff_datetime(value: str, unit: str) -> datetime:
-    days = int(value) * _UNIT_DAYS[unit]
-    return datetime.now(timezone.utc) - timedelta(days=days)
-
-
-def _parse_added_at(added_at: str | None) -> datetime | None:
-    if not added_at:
-        return None
-    try:
-        return datetime.fromisoformat(added_at.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-
-
-def matches_criterion(
-    track: dict, field: str, operator: str, value: str, value2: str | None
-) -> bool:
-    if field == "added_date":
-        added_dt = _parse_added_at(track.get("added_at"))
-        if added_dt is None:
-            return False
-        cutoff = _cutoff_datetime(value, value2)
-        if operator == "within_last":
-            return added_dt >= cutoff
-        if operator == "older_than":
-            return added_dt < cutoff
-        return False
-    return playlist_filter.matches_criterion(track, field, operator, value, value2)
+matches_criterion = playlist_filter.matches_criterion
 
 
 def find_removals_from_tracks(

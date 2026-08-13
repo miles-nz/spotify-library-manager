@@ -55,15 +55,12 @@
 
 <script src="{{ url_for('static', filename='playlist_picker.js') }}"></script>
 <script>
-    const STORAGE_KEY = "spotifyLibraryManager.duplicatePlaylists";
+    let currentSaved = {{ default_prefs | tojson }};
 
     function getSaved() {
-        try {
-            const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
-            return Array.isArray(parsed) && parsed.length >= 2 ? parsed : null;
-        } catch (e) {
-            return null;
-        }
+        return Array.isArray(currentSaved) && currentSaved.length >= 2
+            ? currentSaved
+            : null;
     }
 
     function showConfigured(saved) {
@@ -157,7 +154,7 @@
         errorEl.style.display = "none";
 
         const saved = values.map((v) => ({ id: v.id, name: v.name }));
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+        currentSaved = saved;
         showConfigured(saved);
     });
 

@@ -1,11 +1,11 @@
-{% extends "base.html" %} {% block title %}Missing Tracks - Spotify Library
+{% extends "base.html" %} {% block title %}Playlist Diff - Spotify Library
 Manager{% endblock %} {% block extra_style %} .diff-track { border: 1px solid
 var(--border); border-radius: 8px; padding: 1rem; margin: 0.75rem 0; } .diff-title {
 font-weight: bold; margin-bottom: 0.5rem; } .diff-embed { border: none;
 border-radius: 12px; width: 100%; height: 80px; margin-bottom: 0.5rem; background: var(--bg); }
 .diff-target { display: flex; align-items: center; gap: 0.5rem; padding:
 0.35rem 0; cursor: pointer; } {% endblock %} {% block content %}
-<h1>Missing Tracks</h1>
+<h1>Playlist Diff</h1>
 
 {% if cascade_step %}
 <p class="cascade-banner">Step {{ cascade_step }} of {{ cascade_total }} — {{ cascade_label }}</p>

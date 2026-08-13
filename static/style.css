@@ -96,6 +96,8 @@ button.button:disabled { cursor: default; opacity: 0.6; }
 fieldset { border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin: 1rem 0; }
 legend { font-weight: bold; padding: 0 0.4rem; }
 .criteria-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.criteria-list-row { display: flex; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.5rem; }
+.criteria-list-row .criteria-row { flex: 1; }
 .criteria-row select, .criteria-row input[type="text"], .criteria-row input[type="number"] {
   font-size: 1rem; padding: 0.5rem 0.6rem; border: 1px solid var(--border-light); border-radius: 6px;
   background: var(--bg); color: var(--text);

@@ -33,160 +33,13 @@
 </form>
 
 <script src="{{ url_for('static', filename='playlist_picker.js') }}"></script>
+<script src="{{ url_for('static', filename='criteria_builder.js') }}"></script>
 <script>
-    const FILTER_FIELD_OPERATORS = {
-        release_year: [
-            { value: "is", label: "is" },
-            { value: "before", label: "is before" },
-            { value: "after", label: "is after" },
-            { value: "between", label: "is between" },
-        ],
-        popularity: [
-            { value: "at_least", label: "is at least" },
-            { value: "at_most", label: "is at most" },
-        ],
-        explicit: [{ value: "is", label: "is" }],
-        artist: [{ value: "contains", label: "contains" }],
-        track_name: [{ value: "contains", label: "contains" }],
-    };
-    const FILTER_FIELD_ORDER = [
-        ["release_year", "Release year"],
-        ["popularity", "Popularity (0-100)"],
-        ["explicit", "Explicit"],
-        ["artist", "Artist name"],
-        ["track_name", "Track name"],
-    ];
-    const CLEANUP_FIELD_OPERATORS = {
-        added_date: [
-            { value: "within_last", label: "was added within the last" },
-            { value: "older_than", label: "was added more than … ago" },
-        ],
-        ...FILTER_FIELD_OPERATORS,
-    };
-    const CLEANUP_FIELD_ORDER = [["added_date", "Added date"], ...FILTER_FIELD_ORDER];
+    const DEFAULT_CASCADE = {{ default_cascade | tojson }};
 
-    // Builds a field/operator/value condition row into `container`, shared
-    // by the Playlist Filter and Playlist Cleanup steps. Returns
-    // getValues(), which throws an Error with a readable message if the
-    // condition isn't complete.
-    function buildCriteriaBuilder(container, fieldOperators, fieldOrder) {
-        const row = document.createElement("div");
-        row.className = "criteria-row";
-        const fieldSelect = document.createElement("select");
-        fieldOrder.forEach(([value, label]) => {
-            const opt = document.createElement("option");
-            opt.value = value;
-            opt.textContent = label;
-            fieldSelect.appendChild(opt);
-        });
-        const operatorSelect = document.createElement("select");
-        const valueInputs = document.createElement("span");
-        row.append(fieldSelect, operatorSelect, valueInputs);
-        container.appendChild(row);
-
-        function updateOperators() {
-            const field = fieldSelect.value;
-            operatorSelect.innerHTML = "";
-            fieldOperators[field].forEach((op) => {
-                const opt = document.createElement("option");
-                opt.value = op.value;
-                opt.textContent = op.label;
-                operatorSelect.appendChild(opt);
-            });
-            updateValueInputs();
-        }
-
-        function updateValueInputs() {
-            const field = fieldSelect.value;
-            const operator = operatorSelect.value;
-            valueInputs.innerHTML = "";
-
-            if (field === "added_date") {
-                const input1 = document.createElement("input");
-                input1.type = "number";
-                input1.min = "1";
-                input1.value = "1";
-                input1.style.width = "5rem";
-                input1.className = "value-input";
-                valueInputs.appendChild(input1);
-                const select = document.createElement("select");
-                select.className = "value-input-2";
-                [
-                    ["days", "day(s)"],
-                    ["weeks", "week(s)"],
-                    ["months", "month(s)"],
-                ].forEach(([v, label]) => {
-                    const opt = document.createElement("option");
-                    opt.value = v;
-                    opt.textContent = label;
-                    if (v === "months") opt.selected = true;
-                    select.appendChild(opt);
-                });
-                valueInputs.appendChild(select);
-                return;
-            }
-
-            if (field === "explicit") {
-                const select = document.createElement("select");
-                select.className = "value-input";
-                [
-                    ["yes", "Explicit"],
-                    ["no", "Not explicit"],
-                ].forEach(([v, label]) => {
-                    const opt = document.createElement("option");
-                    opt.value = v;
-                    opt.textContent = label;
-                    select.appendChild(opt);
-                });
-                valueInputs.appendChild(select);
-                return;
-            }
-
-            const input1 = document.createElement("input");
-            input1.type =
-                field === "release_year" || field === "popularity"
-                    ? "number"
-                    : "text";
-            input1.className = "value-input";
-            input1.placeholder =
-                field === "release_year"
-                    ? "e.g. 2026"
-                    : field === "popularity"
-                      ? "0-100"
-                      : "text to match";
-            valueInputs.appendChild(input1);
-
-            if (field === "release_year" && operator === "between") {
-                const and = document.createElement("span");
-                and.textContent = " and ";
-                valueInputs.appendChild(and);
-                const input2 = document.createElement("input");
-                input2.type = "number";
-                input2.className = "value-input-2";
-                input2.placeholder = "e.g. 2027";
-                valueInputs.appendChild(input2);
-            }
-        }
-
-        fieldSelect.addEventListener("change", updateOperators);
-        operatorSelect.addEventListener("change", updateValueInputs);
-        updateOperators();
-
-        return {
-            getValues() {
-                const field = fieldSelect.value;
-                const operator = operatorSelect.value;
-                const valueEl = valueInputs.querySelector(".value-input");
-                const value2El = valueInputs.querySelector(".value-input-2");
-                const value = valueEl ? String(valueEl.value).trim() : "";
-                const value2 = value2El ? String(value2El.value).trim() : "";
-                if (!value) throw new Error("Enter a value for every condition.");
-                if (value2El && !value2)
-                    throw new Error("Fill in both parts of every condition.");
-                return { field, operator, value, value2: value2 || null };
-            },
-        };
-    }
+    // Shared by the Playlist Filter and Playlist Cleanup steps.
+    const FIELD_OPERATORS = fieldOperatorsFromSpec({{ field_operators | tojson }});
+    const FIELD_ORDER = Object.keys(FIELD_OPERATORS);
 
     function fieldset(parent, legendText) {
         const fs = document.createElement("fieldset");
@@ -205,7 +58,7 @@
         return btn;
     }
 
-    function playlistCombo(parent, labelText) {
+    function playlistCombo(parent, labelText, initial) {
         const wrap = document.createElement("div");
         wrap.className = "combo";
         if (labelText) {
@@ -222,24 +75,31 @@
         panel.className = "combo-panel";
         wrap.append(input, panel);
         parent.appendChild(wrap);
-        return setupCombo(input, panel, null);
+        return setupCombo(input, panel, initial || null);
     }
 
-    function playlistRowList(parent, legendText) {
+    function playlistRowList(parent, legendText, initial) {
         const fs = fieldset(parent, legendText);
         const list = document.createElement("div");
         fs.appendChild(list);
         const addBtn = secondaryButton("+ Add another playlist");
         fs.appendChild(addBtn);
         const rows = createComboRowManager(list, 1);
-        rows.reset([null]);
+        rows.reset(initial && initial.length ? initial : [null]);
         addBtn.addEventListener("click", () => rows.addRow(null));
         return rows;
     }
 
-    function buildDuplicatesStep(card) {
-        const rows = playlistRowList(card, "Playlists to check for duplicates");
-        rows.reset([null, null]);
+    function buildDuplicatesStep(card, initial) {
+        const playlists =
+            initial && initial.playlists && initial.playlists.length >= 2
+                ? initial.playlists
+                : [null, null];
+        const rows = playlistRowList(
+            card,
+            "Playlists to check for duplicates",
+            playlists,
+        );
         card.cascadeGetConfig = () => {
             const values = rows.getValues();
             if (values.some((v) => !v.id))
@@ -251,18 +111,23 @@
         };
     }
 
-    function buildFilterStep(card) {
-        const sourceRows = playlistRowList(card, "Look in these playlists");
-
-        const criteriaFs = fieldset(card, "Find tracks where");
-        const criteria = buildCriteriaBuilder(
-            criteriaFs,
-            FILTER_FIELD_OPERATORS,
-            FILTER_FIELD_ORDER,
+    function buildFilterStep(card, initial) {
+        const sourceRows = playlistRowList(
+            card,
+            "Look in these playlists",
+            initial && initial.sources,
         );
+
+        const criteriaFs = fieldset(card, "Find tracks where (all conditions must match)");
+        const criteriaList = buildCriteriaListBuilder(criteriaFs, FIELD_OPERATORS, FIELD_ORDER);
+        criteriaList.reset(initial && initial.criteria);
+        const addCriteriaBtn = secondaryButton("+ Add another condition");
+        addCriteriaBtn.addEventListener("click", () => criteriaList.addRow(null));
+        criteriaFs.appendChild(addCriteriaBtn);
 
         const destFs = fieldset(card, "Add matches to");
         const groupName = "dest-mode-" + Math.random().toString(36).slice(2);
+        const isNewDest = !!(initial && initial.destMode === "new");
 
         const existingLabel = document.createElement("label");
         existingLabel.className = "dest-option";
@@ -270,13 +135,20 @@
         existingRadio.type = "radio";
         existingRadio.name = groupName;
         existingRadio.value = "existing";
-        existingRadio.checked = true;
+        existingRadio.checked = !isNewDest;
         existingLabel.append(existingRadio, " An existing playlist");
         destFs.appendChild(existingLabel);
         const destDetailExisting = document.createElement("div");
         destDetailExisting.className = "dest-detail";
+        if (isNewDest) destDetailExisting.style.display = "none";
         destFs.appendChild(destDetailExisting);
-        const destCombo = playlistCombo(destDetailExisting, null);
+        const destCombo = playlistCombo(
+            destDetailExisting,
+            null,
+            initial && initial.destPlaylistId
+                ? { id: initial.destPlaylistId, name: initial.destPlaylistName }
+                : null,
+        );
 
         const newLabel = document.createElement("label");
         newLabel.className = "dest-option";
@@ -284,14 +156,17 @@
         newRadio.type = "radio";
         newRadio.name = groupName;
         newRadio.value = "new";
+        newRadio.checked = isNewDest;
         newLabel.append(newRadio, " A new playlist");
         destFs.appendChild(newLabel);
         const destDetailNew = document.createElement("div");
         destDetailNew.className = "dest-detail";
-        destDetailNew.style.display = "none";
+        destDetailNew.style.display = isNewDest ? "block" : "none";
         const newNameInput = document.createElement("input");
         newNameInput.type = "text";
         newNameInput.placeholder = "New playlist name";
+        if (isNewDest && initial.destNewName)
+            newNameInput.value = initial.destNewName;
         destDetailNew.appendChild(newNameInput);
         destFs.appendChild(destDetailNew);
 
@@ -307,7 +182,7 @@
             const sources = sourceRows.getValues();
             if (sources.some((s) => !s.id))
                 throw new Error("Playlist Filter: pick a playlist for every source slot.");
-            const { field, operator, value, value2 } = criteria.getValues();
+            const criteria = criteriaList.getValues();
 
             let destinationMode = existingRadio.checked ? "existing" : "new";
             let destinationPlaylistId = null,
@@ -328,10 +203,7 @@
             return {
                 type: "playlist_filter",
                 playlist_ids: sources.map((s) => s.id),
-                field,
-                operator,
-                value,
-                value2,
+                criteria,
                 destination_mode: destinationMode,
                 destination_playlist_id: destinationPlaylistId,
                 destination_playlist_name: destinationPlaylistName,
@@ -340,16 +212,18 @@
         };
     }
 
-    function buildCleanupStep(card) {
+    function buildCleanupStep(card, initial) {
         const playlistFs = fieldset(card, "Playlist");
-        const combo = playlistCombo(playlistFs, null);
+        const combo = playlistCombo(
+            playlistFs,
+            null,
+            initial && initial.playlistId
+                ? { id: initial.playlistId, name: initial.playlistName }
+                : null,
+        );
 
         const criteriaFs = fieldset(card, "Keep tracks where");
-        const criteria = buildCriteriaBuilder(
-            criteriaFs,
-            CLEANUP_FIELD_OPERATORS,
-            CLEANUP_FIELD_ORDER,
-        );
+        const criteria = buildCriteriaBuilder(criteriaFs, FIELD_OPERATORS, FIELD_ORDER, initial);
         const hint = document.createElement("p");
         hint.className = "hint";
         hint.textContent = "Everything that doesn't match will be removed.";
@@ -370,17 +244,25 @@
         };
     }
 
-    function buildDiffStep(card) {
-        const sourceRows = playlistRowList(card, "Check these playlists");
-        const targetRows = playlistRowList(card, "Are missing from these playlists");
+    function buildDiffStep(card, initial) {
+        const sourceRows = playlistRowList(
+            card,
+            "Check these playlists",
+            initial && initial.sources,
+        );
+        const targetRows = playlistRowList(
+            card,
+            "Are missing from these playlists",
+            initial && initial.targets,
+        );
 
         card.cascadeGetConfig = () => {
             const sources = sourceRows.getValues();
             const targets = targetRows.getValues();
             if (sources.some((s) => !s.id))
-                throw new Error("Missing Tracks: pick a playlist for every source slot.");
+                throw new Error("Playlist Diff: pick a playlist for every source slot.");
             if (targets.some((t) => !t.id))
-                throw new Error("Missing Tracks: pick a playlist for every target slot.");
+                throw new Error("Playlist Diff: pick a playlist for every target slot.");
             return {
                 type: "playlist_diff",
                 source_ids: sources.map((s) => s.id),
@@ -389,10 +271,18 @@
         };
     }
 
-    function buildSyncStep(card) {
+    function buildSyncStep(card, initial) {
         const fs = fieldset(card, "Compare these two playlists against Liked Songs");
-        const comboA = playlistCombo(fs, "Playlist A");
-        const comboB = playlistCombo(fs, "Playlist B");
+        const comboA = playlistCombo(
+            fs,
+            "Playlist A",
+            initial && initial.id1 ? { id: initial.id1, name: initial.name1 } : null,
+        );
+        const comboB = playlistCombo(
+            fs,
+            "Playlist B",
+            initial && initial.id2 ? { id: initial.id2, name: initial.name2 } : null,
+        );
 
         card.cascadeGetConfig = () => {
             const a = comboA.getValue();
@@ -409,7 +299,7 @@
         duplicates: { label: "Duplicate Finder", build: buildDuplicatesStep },
         playlist_filter: { label: "Playlist Filter", build: buildFilterStep },
         playlist_cleanup: { label: "Playlist Cleanup", build: buildCleanupStep },
-        playlist_diff: { label: "Missing Tracks", build: buildDiffStep },
+        playlist_diff: { label: "Playlist Diff", build: buildDiffStep },
         sync: { label: "Liked Songs Sync", build: buildSyncStep },
     };
 
@@ -478,7 +368,7 @@
         });
     }
 
-    function createStepCard(type) {
+    function createStepCard(type, initial) {
         const card = document.createElement("div");
         card.className = "cascade-step-card";
 
@@ -497,7 +387,7 @@
         header.append(number, handle, title, removeBtn);
         card.appendChild(header);
 
-        STEP_DEFS[type].build(card);
+        STEP_DEFS[type].build(card, initial);
 
         removeBtn.addEventListener("click", () => {
             card.remove();
@@ -570,5 +460,24 @@
     });
 
     updateStartButton();
+
+    if (Array.isArray(DEFAULT_CASCADE) && DEFAULT_CASCADE.length > 0) {
+        (async () => {
+            try {
+                await ensurePlaylistsLoaded();
+            } catch (e) {
+                return;
+            }
+            DEFAULT_CASCADE.forEach((stepDefault) => {
+                const type = stepDefault.type;
+                const paletteBtn = document.getElementById("palette-" + type);
+                if (!STEP_DEFS[type] || !paletteBtn || paletteBtn.disabled) return;
+                paletteBtn.disabled = true;
+                stepList.appendChild(createStepCard(type, stepDefault));
+            });
+            renumberSteps();
+            updateStartButton();
+        })();
+    }
 </script>
 {% endif %} {% endblock %}

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% block title %}Missing Tracks - Spotify Library Manager{% endblock %}
+{% block title %}Playlist Diff - Spotify Library Manager{% endblock %}
 {% block content %}
-<h1>Missing Tracks</h1>
+<h1>Playlist Diff</h1>
 <p>
     Find tracks in one or more playlists that are missing from one or more
     other playlists, and choose which ones to add.
@@ -68,21 +68,16 @@
 
 <script src="{{ url_for('static', filename='playlist_picker.js') }}"></script>
 <script>
-    const STORAGE_KEY = "spotifyLibraryManager.playlistDiff";
+    let currentSaved = {{ default_prefs | tojson }};
 
     function getSaved() {
-        try {
-            const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
-            return parsed &&
-                Array.isArray(parsed.sources) &&
-                parsed.sources.length >= 1 &&
-                Array.isArray(parsed.targets) &&
-                parsed.targets.length >= 1
-                ? parsed
-                : null;
-        } catch (e) {
-            return null;
-        }
+        return currentSaved &&
+            Array.isArray(currentSaved.sources) &&
+            currentSaved.sources.length >= 1 &&
+            Array.isArray(currentSaved.targets) &&
+            currentSaved.targets.length >= 1
+            ? currentSaved
+            : null;
     }
 
     function showConfigured(saved) {
@@ -191,7 +186,7 @@
         errorEl.style.display = "none";
 
         const saved = { sources, targets };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+        currentSaved = saved;
         showConfigured(saved);
     });
 

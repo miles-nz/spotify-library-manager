@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}All Playlists - Spotify Library Manager{% endblock %}
+{% block extra_style %}
+  .playlist-row { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0; border-bottom: 1px solid var(--border); }
+  .playlist-row:last-child { border-bottom: none; }
+  .playlist-thumb { width: 2.5rem; height: 2.5rem; border-radius: 4px; object-fit: cover; background: var(--thumb-bg); flex-shrink: 0; }
+  .playlist-fields { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; }
+  .copy-field {
+    cursor: pointer; border: none; background: none; padding: 0; margin: 0; text-align: left;
+    font-family: inherit; color: inherit; border-radius: 4px;
+  }
+  .copy-field:hover { background: var(--hover-bg); }
+  .copy-name { font-weight: bold; }
+  .copy-id { color: var(--muted); font-size: 0.85rem; font-family: monospace; overflow-wrap: anywhere; }
+  .copy-field.copied { color: var(--accent); }
+{% endblock %}
+{% block content %}
+<h1>All Playlists</h1>
+<p>Click a playlist's name or ID to copy it to the clipboard.</p>
+
+{% if needs_credentials %}
+  <p class="warning">
+    No Spotify credentials found. Copy <code>.env.example</code> to
+    <code>.env</code> and fill in <code>SPOTIFY_CLIENT_ID</code> and
+    <code>SPOTIFY_CLIENT_SECRET</code>, then restart the app. See the README for
+    how to register a Spotify app.
+  </p>
+{% elif not logged_in %}
+  <p><a class="button" href="{{ url_for('login') }}">Log in with Spotify</a></p>
+{% else %}
+<p id="loading-hint"><span class="spinner"></span>Loading playlists…</p>
+<p id="error-hint" class="warning" style="display: none">
+  Failed to load your playlists. Check your connection and try again.
+</p>
+<div id="playlist-list"></div>
+
+<script>
+    const listEl = document.getElementById("playlist-list");
+    const loadingEl = document.getElementById("loading-hint");
+    const errorEl = document.getElementById("error-hint");
+
+    async function copyText(button, text) {
+        try {
+            await navigator.clipboard.writeText(text);
+        } catch (e) {
+            return;
+        }
+        const original = button.textContent;
+        button.classList.add("copied");
+        button.textContent = "Copied!";
+        setTimeout(() => {
+            button.classList.remove("copied");
+            button.textContent = original;
+        }, 1200);
+    }
+
+    function renderPlaylists(playlists) {
+        listEl.innerHTML = "";
+        playlists.forEach((p) => {
+            const row = document.createElement("div");
+            row.className = "playlist-row";
+
+            if (p.image_url) {
+                const img = document.createElement("img");
+                img.className = "playlist-thumb";
+                img.src = p.image_url;
+                img.alt = "";
+                row.appendChild(img);
+            }
+
+            const fields = document.createElement("div");
+            fields.className = "playlist-fields";
+
+            const nameBtn = document.createElement("button");
+            nameBtn.type = "button";
+            nameBtn.className = "copy-field copy-name";
+            nameBtn.textContent = p.name;
+            nameBtn.title = "Click to copy playlist name";
+            nameBtn.addEventListener("click", () => copyText(nameBtn, p.name));
+            fields.appendChild(nameBtn);
+
+            const idBtn = document.createElement("button");
+            idBtn.type = "button";
+            idBtn.className = "copy-field copy-id";
+            idBtn.textContent = p.id;
+            idBtn.title = "Click to copy playlist ID";
+            idBtn.addEventListener("click", () => copyText(idBtn, p.id));
+            fields.appendChild(idBtn);
+
+            row.appendChild(fields);
+            listEl.appendChild(row);
+        });
+    }
+
+    async function loadPlaylists() {
+        try {
+            const resp = await fetch("{{ url_for('api_playlists') }}");
+            if (resp.status === 401) {
+                window.location = "{{ url_for('login') }}";
+                return;
+            }
+            if (!resp.ok) throw new Error("request failed");
+            const playlists = await resp.json();
+            loadingEl.style.display = "none";
+            if (playlists.length === 0) {
+                loadingEl.textContent = "No playlists found.";
+                loadingEl.style.display = "block";
+                return;
+            }
+            renderPlaylists(playlists);
+        } catch (e) {
+            loadingEl.style.display = "none";
+            errorEl.style.display = "block";
+        }
+    }
+
+    loadPlaylists();
+</script>
+{% endif %}
+{% endblock %}

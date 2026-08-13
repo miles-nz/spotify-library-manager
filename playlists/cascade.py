@@ -19,7 +19,7 @@ STEP_LABELS = {
     "duplicates": "Duplicate Finder",
     "playlist_filter": "Playlist Filter",
     "playlist_cleanup": "Playlist Cleanup",
-    "playlist_diff": "Missing Tracks",
+    "playlist_diff": "Playlist Diff",
     "sync": "Liked Songs Sync",
 }
 
@@ -71,7 +71,7 @@ def scan_step(cache: PlaylistCache, step: dict) -> Any:
     if step_type == "playlist_filter":
         playlists = cache.playlists(step["playlist_ids"])
         matches = playlist_filter_module.find_matches_from_tracks(
-            playlists, step["field"], step["operator"], step["value"], step.get("value2")
+            playlists, step["criteria"]
         )
         already_in_destination = 0
         similar_versions: dict = {}
@@ -189,19 +189,15 @@ def apply_step(sp: Spotify, cache: PlaylistCache, step: dict, result: Any, form)
             if uri in missing_uris and playlist_id in target_ids:
                 additions.append({"playlist_id": playlist_id, "uri": uri})
 
-        by_playlist: dict[str, list[str]] = {}
-        for addition in additions:
-            by_playlist.setdefault(addition["playlist_id"], []).append(addition["uri"])
-
-        added_counts: dict[str, int] = {}
-        for playlist_id, uris in by_playlist.items():
+        def _add_tracks(playlist_id, uris):
             existing_uris = {t["uri"] for t in cache.playlist(playlist_id)["tracks"]}
-            added, _skipped = playlist_filter_module.add_new_tracks_to_playlist(
+            added, skipped = playlist_filter_module.add_new_tracks_to_playlist(
                 sp, playlist_id, uris, existing_uris
             )
-            if added:
-                added_counts[playlist_id] = added
             cache.add_tracks(playlist_id, _lookup_tracks(cache, step["source_ids"], uris))
+            return added, skipped
+
+        added_counts = playlist_diff_module.add_to_playlists(sp, additions, add_tracks=_add_tracks)
 
         targets_by_id = {t["id"]: t["name"] for t in result["targets"]}
         added_summary = [

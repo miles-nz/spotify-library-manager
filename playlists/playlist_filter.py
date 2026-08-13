@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import datetime, timedelta, timezone
 
 from spotipy import Spotify
 
@@ -18,12 +19,29 @@ _DASH_SUFFIX_RE = re.compile(r"\s+-\s+[^-]+$")
 logger = logging.getLogger(__name__)
 
 FIELD_OPERATORS = {
+    "added_date": ["within_last", "older_than"],
     "release_year": ["is", "before", "after", "between"],
     "popularity": ["at_least", "at_most"],
     "explicit": ["is"],
     "artist": ["contains"],
     "track_name": ["contains"],
 }
+
+_UNIT_DAYS = {"days": 1, "weeks": 7, "months": 30}
+
+
+def _cutoff_datetime(value: str, unit: str) -> datetime:
+    days = int(value) * _UNIT_DAYS[unit]
+    return datetime.now(timezone.utc) - timedelta(days=days)
+
+
+def _parse_added_at(added_at: str | None) -> datetime | None:
+    if not added_at:
+        return None
+    try:
+        return datetime.fromisoformat(added_at.replace("Z", "+00:00"))
+    except ValueError:
+        return None
 
 
 def _parse_year(release_date: str | None) -> int | None:
@@ -74,7 +92,17 @@ def get_playlist_tracks(
 def matches_criterion(
     track: dict, field: str, operator: str, value: str, value2: str | None
 ) -> bool:
-    if field == "release_year":
+    if field == "added_date":
+        added_dt = _parse_added_at(track.get("added_at"))
+        if added_dt is None:
+            return False
+        cutoff = _cutoff_datetime(value, value2)
+        if operator == "within_last":
+            return added_dt >= cutoff
+        if operator == "older_than":
+            return added_dt < cutoff
+        return False
+    elif field == "release_year":
         year = track["release_year"]
         if year is None:
             return False
@@ -107,15 +135,20 @@ def matches_criterion(
     return False
 
 
+def matches_all_criteria(track: dict, criteria: list[dict]) -> bool:
+    return all(
+        matches_criterion(track, c["field"], c["operator"], c["value"], c.get("value2"))
+        for c in criteria
+    )
+
+
 def find_matches_from_tracks(
     source_playlists: list[dict],
-    field: str,
-    operator: str,
-    value: str,
-    value2: str | None,
+    criteria: list[dict],
 ) -> list[dict]:
     """source_playlists: [{"id": ..., "name": ..., "tracks": [...]}, ...]
-    with already-fetched tracks.
+    with already-fetched tracks. criteria: [{"field", "operator", "value",
+    "value2"}, ...] - a track must match every criterion.
 
     Returns matching tracks, deduped by uri across source playlists, sorted
     by artist/name: [{"uri", "name", "artists"}]
@@ -126,7 +159,7 @@ def find_matches_from_tracks(
         for track in playlist["tracks"]:
             if track["uri"] in seen:
                 continue
-            if matches_criterion(track, field, operator, value, value2):
+            if matches_all_criteria(track, criteria):
                 seen[track["uri"]] = {
                     "uri": track["uri"],
                     "name": track["name"],
@@ -145,10 +178,7 @@ def find_matches_from_tracks(
 def find_matches(
     sp: Spotify,
     source_playlists: list[dict],
-    field: str,
-    operator: str,
-    value: str,
-    value2: str | None,
+    criteria: list[dict],
     cancel_check: CancelCheck | None = None,
 ) -> list[dict]:
     """source_playlists: [{"id": ..., "name": ...}, ...]"""
@@ -159,7 +189,7 @@ def find_matches(
         check_cancelled(cancel_check)
         fetched.append({"id": playlist["id"], "name": playlist["name"], "tracks": tracks})
 
-    return find_matches_from_tracks(fetched, field, operator, value, value2)
+    return find_matches_from_tracks(fetched, criteria)
 
 
 def get_playlist_track_uris(

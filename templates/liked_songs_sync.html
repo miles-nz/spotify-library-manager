@@ -68,14 +68,10 @@ margin: 0.75rem 0; } .combo label { display: block; margin-bottom: 0.25rem; }
 
 <script src="{{ url_for('static', filename='playlist_picker.js') }}"></script>
 <script>
-    const STORAGE_KEY = "spotifyLibraryManager.playlists";
+    let currentSaved = {{ default_prefs | tojson }};
 
     function getSaved() {
-        try {
-            return JSON.parse(localStorage.getItem(STORAGE_KEY));
-        } catch (e) {
-            return null;
-        }
+        return currentSaved;
     }
 
     function showConfigured(saved) {
@@ -179,7 +175,7 @@ margin: 0.75rem 0; } .combo label { display: block; margin-bottom: 0.25rem; }
         errorEl.style.display = "none";
 
         const saved = { id1: a.id, name1: a.name, id2: b.id, name2: b.name };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+        currentSaved = saved;
         showConfigured(saved);
     });
 

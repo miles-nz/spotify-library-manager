@@ -27,6 +27,77 @@ logger = logging.getLogger("app")
 # counts; names can be loaded on demand via /diff/names.
 NAME_LOOKUP_THRESHOLD = 200
 
+# Hardcoded per-tool defaults, set via env vars so the actual playlist
+# IDs/names never land in this public repo. Only applied for
+# SPOTIFY_OWNER_ID so anyone else deploying this app sees a blank picker.
+SPOTIFY_OWNER_ID = os.environ.get("SPOTIFY_OWNER_ID")
+
+
+def _parse_json_env(name: str):
+    raw = os.environ.get(name)
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        logger.warning("Invalid JSON in env var %s", name)
+        return None
+
+
+DEFAULT_PREFERENCES = {
+    "liked_songs_sync": _parse_json_env("DEFAULT_LIKED_SONGS_SYNC"),
+    "duplicates": _parse_json_env("DEFAULT_DUPLICATES"),
+    "playlist_filter": _parse_json_env("DEFAULT_PLAYLIST_FILTER"),
+    "playlist_cleanup": _parse_json_env("DEFAULT_PLAYLIST_CLEANUP"),
+    "playlist_diff": _parse_json_env("DEFAULT_PLAYLIST_DIFF"),
+    "cascade": _parse_json_env("DEFAULT_CASCADE"),
+}
+
+
+def _default_preferences(tool: str, sp):
+    if sp is None:
+        return None
+    if SPOTIFY_OWNER_ID and sp.current_user().get("id") != SPOTIFY_OWNER_ID:
+        return None
+    return DEFAULT_PREFERENCES.get(tool)
+
+
+# Maps a cascade step type to the DEFAULT_PREFERENCES key holding that same
+# tool's own default config, so DEFAULT_CASCADE only has to name which steps
+# to pre-populate and in what order - not repeat their settings.
+_CASCADE_STEP_PREF_KEYS = {
+    "duplicates": "duplicates",
+    "playlist_filter": "playlist_filter",
+    "playlist_cleanup": "playlist_cleanup",
+    "playlist_diff": "playlist_diff",
+    "sync": "liked_songs_sync",
+}
+
+
+def _default_cascade_steps(sp):
+    """DEFAULT_CASCADE is just an ordered list of step types, e.g.
+    ["playlist_diff", "duplicates"]. Each step's actual config comes from
+    that tool's own DEFAULT_* env var, so there's one source of truth per
+    playlist selection."""
+    step_types = _default_preferences("cascade", sp)
+    if not step_types:
+        return None
+
+    # Ownership was already checked above, so it's safe to read the other
+    # tools' defaults straight from DEFAULT_PREFERENCES from here on.
+    steps = []
+    for step_type in step_types:
+        pref_key = _CASCADE_STEP_PREF_KEYS.get(step_type)
+        base = DEFAULT_PREFERENCES.get(pref_key) if pref_key else None
+        if not base:
+            continue
+        if step_type == "duplicates":
+            steps.append({"type": step_type, "playlists": base})
+        else:
+            steps.append({"type": step_type, **base})
+    return steps or None
+
+
 app = Flask(__name__)
 
 _sync_job = BackgroundJob(["core.sync", "app"])
@@ -82,10 +153,7 @@ def _run_duplicate_scan(playlist_ids: list[str]):
 
 def _run_playlist_filter_scan(
     playlist_ids: list[str],
-    field: str,
-    operator: str,
-    value: str,
-    value2: str | None,
+    criteria: list[dict],
     destination: dict,
 ):
     def target(cancel_check):
@@ -95,7 +163,7 @@ def _run_playlist_filter_scan(
             for pid in playlist_ids
         ]
         matches = playlist_filter_module.find_matches(
-            sp, playlists, field, operator, value, value2, cancel_check=cancel_check
+            sp, playlists, criteria, cancel_check=cancel_check
         )
 
         already_in_destination = 0
@@ -313,6 +381,19 @@ def api_search():
     return jsonify(tracks)
 
 
+@app.route("/all-playlists")
+def all_playlists_page():
+    if not _credentials_configured():
+        return render_template("all_playlists.html", needs_credentials=True)
+
+    sp = get_authenticated_client()
+    return render_template(
+        "all_playlists.html",
+        needs_credentials=False,
+        logged_in=sp is not None,
+    )
+
+
 @app.route("/login")
 def login():
     oauth = make_oauth(open_browser=False)
@@ -340,6 +421,7 @@ def liked_songs_sync():
         "liked_songs_sync.html",
         needs_credentials=False,
         logged_in=sp is not None,
+        default_prefs=_default_preferences("liked_songs_sync", sp),
     )
 
 
@@ -464,6 +546,7 @@ def duplicates_picker():
         "duplicates.html",
         needs_credentials=False,
         logged_in=sp is not None,
+        default_prefs=_default_preferences("duplicates", sp),
     )
 
 
@@ -553,6 +636,8 @@ def playlist_filter_picker():
         "playlist_filter.html",
         needs_credentials=False,
         logged_in=sp is not None,
+        default_prefs=_default_preferences("playlist_filter", sp),
+        field_operators=playlist_filter_module.FIELD_OPERATORS,
     )
 
 
@@ -566,21 +651,33 @@ def playlist_filter_scan():
         return redirect(url_for("login"))
 
     playlist_ids = request.args.getlist("playlist_id")
-    field = request.args.get("field")
-    operator = request.args.get("operator")
-    value = request.args.get("value")
-    value2 = request.args.get("value2")
+    fields = request.args.getlist("field")
+    operators = request.args.getlist("operator")
+    values = request.args.getlist("value")
+    value2s = request.args.getlist("value2")
     destination_mode = request.args.get("destination_mode")
     destination_playlist_id = request.args.get("destination_playlist_id")
     destination_playlist_name = request.args.get("destination_playlist_name")
     destination_name = request.args.get("destination_name")
 
-    if not playlist_ids or not field or not operator or not value:
+    if (
+        not playlist_ids
+        or not fields
+        or len(fields) != len(operators)
+        or len(fields) != len(values)
+        or len(fields) != len(value2s)
+        or any(not v for v in values)
+    ):
         return redirect(url_for("playlist_filter_picker"))
     if destination_mode == "existing" and not destination_playlist_id:
         return redirect(url_for("playlist_filter_picker"))
     if destination_mode == "new" and not destination_name:
         return redirect(url_for("playlist_filter_picker"))
+
+    criteria = [
+        {"field": f, "operator": o, "value": v, "value2": v2 or None}
+        for f, o, v, v2 in zip(fields, operators, values, value2s)
+    ]
 
     destination = {
         "destination_mode": destination_mode,
@@ -589,7 +686,7 @@ def playlist_filter_scan():
         "destination_name": destination_name,
     }
     _filter_job.start(
-        _run_playlist_filter_scan(playlist_ids, field, operator, value, value2, destination)
+        _run_playlist_filter_scan(playlist_ids, criteria, destination)
     )
 
     return render_template(
@@ -687,6 +784,8 @@ def playlist_cleanup_picker():
         "playlist_cleanup.html",
         needs_credentials=False,
         logged_in=sp is not None,
+        default_prefs=_default_preferences("playlist_cleanup", sp),
+        field_operators=playlist_cleanup_module.FIELD_OPERATORS,
     )
 
 
@@ -790,6 +889,7 @@ def playlist_diff_picker():
         "playlist_diff.html",
         needs_credentials=False,
         logged_in=sp is not None,
+        default_prefs=_default_preferences("playlist_diff", sp),
     )
 
 
@@ -897,6 +997,8 @@ def cascade_picker():
         "cascade.html",
         needs_credentials=False,
         logged_in=sp is not None,
+        default_cascade=_default_cascade_steps(sp),
+        field_operators=playlist_filter_module.FIELD_OPERATORS,
     )
 
 

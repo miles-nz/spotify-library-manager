@@ -46,18 +46,13 @@
     </fieldset>
 
     <fieldset>
-        <legend>Find tracks where</legend>
-        <div class="criteria-row">
-            <select id="field-select">
-                <option value="release_year">Release year</option>
-                <option value="popularity">Popularity (0-100)</option>
-                <option value="explicit">Explicit</option>
-                <option value="artist">Artist name</option>
-                <option value="track_name">Track name</option>
-            </select>
-            <select id="operator-select"></select>
-            <span id="value-inputs"></span>
-        </div>
+        <legend>Find tracks where (all conditions must match)</legend>
+        <div id="criteria-list"></div>
+        <p>
+            <button class="button secondary" id="add-criteria-btn" type="button">
+                + Add another condition
+            </button>
+        </p>
     </fieldset>
 
     <fieldset>
@@ -106,68 +101,21 @@
 </div>
 
 <script src="{{ url_for('static', filename='playlist_picker.js') }}"></script>
+<script src="{{ url_for('static', filename='criteria_builder.js') }}"></script>
 <script>
-    const STORAGE_KEY = "spotifyLibraryManager.playlistFilter";
+    let currentSaved = {{ default_prefs | tojson }};
 
-    const FIELD_OPERATORS = {
-        release_year: [
-            { value: "is", label: "is" },
-            { value: "before", label: "is before" },
-            { value: "after", label: "is after" },
-            { value: "between", label: "is between" },
-        ],
-        popularity: [
-            { value: "at_least", label: "is at least" },
-            { value: "at_most", label: "is at most" },
-        ],
-        explicit: [{ value: "is", label: "is" }],
-        artist: [{ value: "contains", label: "contains" }],
-        track_name: [{ value: "contains", label: "contains" }],
-    };
-    const FIELD_LABELS = {
-        release_year: "Release year",
-        popularity: "Popularity",
-        explicit: "Explicit",
-        artist: "Artist name",
-        track_name: "Track name",
-    };
-    const OPERATOR_LABELS = {
-        is: "is",
-        before: "is before",
-        after: "is after",
-        between: "is between",
-        at_least: "is at least",
-        at_most: "is at most",
-        contains: "contains",
-    };
+    const FIELD_OPERATORS = fieldOperatorsFromSpec({{ field_operators | tojson }});
+    const FIELD_ORDER = Object.keys(FIELD_OPERATORS);
 
     function getSaved() {
-        try {
-            const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
-            return parsed &&
-                Array.isArray(parsed.sources) &&
-                parsed.sources.length >= 1
-                ? parsed
-                : null;
-        } catch (e) {
-            return null;
-        }
-    }
-
-    function describeCriterion(saved) {
-        let desc =
-            FIELD_LABELS[saved.field] +
-            " " +
-            OPERATOR_LABELS[saved.operator] +
-            " ";
-        if (saved.field === "explicit") {
-            desc += saved.value === "yes" ? "yes" : "no";
-        } else if (saved.operator === "between") {
-            desc += saved.value + " and " + saved.value2;
-        } else {
-            desc += '"' + saved.value + '"';
-        }
-        return desc;
+        return currentSaved &&
+            Array.isArray(currentSaved.sources) &&
+            currentSaved.sources.length >= 1 &&
+            Array.isArray(currentSaved.criteria) &&
+            currentSaved.criteria.length >= 1
+            ? currentSaved
+            : null;
     }
 
     function describeDestination(saved) {
@@ -190,16 +138,18 @@
         });
 
         document.getElementById("configured-criteria").textContent =
-            "Where " + describeCriterion(saved);
+            "Where " + describeCriteria(saved.criteria);
         document.getElementById("configured-destination").textContent =
             describeDestination(saved);
 
         const params = new URLSearchParams();
         saved.sources.forEach((p) => params.append("playlist_id", p.id));
-        params.set("field", saved.field);
-        params.set("operator", saved.operator);
-        params.set("value", saved.value);
-        params.set("value2", saved.value2 || "");
+        saved.criteria.forEach((c) => {
+            params.append("field", c.field);
+            params.append("operator", c.operator);
+            params.append("value", c.value);
+            params.append("value2", c.value2 || "");
+        });
         params.set("destination_mode", saved.destMode);
         if (saved.destMode === "new") {
             params.set("destination_name", saved.destNewName);
@@ -222,77 +172,15 @@
 
     let destCombo = null;
 
-    function updateOperators(selectedOperator) {
-        const field = document.getElementById("field-select").value;
-        const operatorSelect = document.getElementById("operator-select");
-        operatorSelect.innerHTML = "";
-        FIELD_OPERATORS[field].forEach((op) => {
-            const opt = document.createElement("option");
-            opt.value = op.value;
-            opt.textContent = op.label;
-            if (op.value === selectedOperator) opt.selected = true;
-            operatorSelect.appendChild(opt);
-        });
-        updateValueInputs();
-    }
-
-    function updateValueInputs(value, value2) {
-        const field = document.getElementById("field-select").value;
-        const operator = document.getElementById("operator-select").value;
-        const container = document.getElementById("value-inputs");
-        container.innerHTML = "";
-
-        if (field === "explicit") {
-            const select = document.createElement("select");
-            select.id = "value-input";
-            [
-                ["yes", "Explicit"],
-                ["no", "Not explicit"],
-            ].forEach(([v, label]) => {
-                const opt = document.createElement("option");
-                opt.value = v;
-                opt.textContent = label;
-                if (v === value) opt.selected = true;
-                select.appendChild(opt);
-            });
-            container.appendChild(select);
-            return;
-        }
-
-        const input1 = document.createElement("input");
-        input1.type =
-            field === "release_year" || field === "popularity"
-                ? "number"
-                : "text";
-        input1.id = "value-input";
-        input1.placeholder =
-            field === "release_year"
-                ? "e.g. 2026"
-                : field === "popularity"
-                  ? "0-100"
-                  : "text to match";
-        if (value) input1.value = value;
-        container.appendChild(input1);
-
-        if (field === "release_year" && operator === "between") {
-            const and = document.createElement("span");
-            and.textContent = " and ";
-            container.appendChild(and);
-            const input2 = document.createElement("input");
-            input2.type = "number";
-            input2.id = "value-input-2";
-            input2.placeholder = "e.g. 2027";
-            if (value2) input2.value = value2;
-            container.appendChild(input2);
-        }
-    }
+    const criteriaRowManager = buildCriteriaListBuilder(
+        document.getElementById("criteria-list"),
+        FIELD_OPERATORS,
+        FIELD_ORDER,
+    );
 
     document
-        .getElementById("field-select")
-        .addEventListener("change", () => updateOperators());
-    document
-        .getElementById("operator-select")
-        .addEventListener("change", () => updateValueInputs());
+        .getElementById("add-criteria-btn")
+        .addEventListener("click", () => criteriaRowManager.addRow(null));
 
     document.querySelectorAll('input[name="dest-mode"]').forEach((radio) => {
         radio.addEventListener("change", () => {
@@ -336,14 +224,7 @@
         const sources = saved && saved.sources.length ? saved.sources : [null];
         sourceRowManager.reset(sources);
 
-        document.getElementById("field-select").value = saved
-            ? saved.field
-            : "release_year";
-        updateOperators(saved ? saved.operator : undefined);
-        updateValueInputs(
-            saved ? saved.value : undefined,
-            saved ? saved.value2 : undefined,
-        );
+        criteriaRowManager.reset(saved ? saved.criteria : null);
 
         const destMode = saved ? saved.destMode : "existing";
         document.querySelector(
@@ -388,20 +269,11 @@
             return;
         }
 
-        const field = document.getElementById("field-select").value;
-        const operator = document.getElementById("operator-select").value;
-        const valueInput = document.getElementById("value-input");
-        const value = valueInput.value.trim();
-        const value2Input = document.getElementById("value-input-2");
-        const value2 = value2Input ? value2Input.value.trim() : "";
-
-        if (!value) {
-            errorEl.textContent = "Enter a value for the condition.";
-            errorEl.style.display = "block";
-            return;
-        }
-        if (value2Input && !value2) {
-            errorEl.textContent = 'Enter both values for "is between".';
+        let criteria;
+        try {
+            criteria = criteriaRowManager.getValues();
+        } catch (e) {
+            errorEl.textContent = e.message;
             errorEl.style.display = "block";
             return;
         }
@@ -434,16 +306,13 @@
 
         const saved = {
             sources,
-            field,
-            operator,
-            value,
-            value2,
+            criteria,
             destMode,
             destPlaylistId,
             destPlaylistName,
             destNewName,
         };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+        currentSaved = saved;
         showConfigured(saved);
     });
 

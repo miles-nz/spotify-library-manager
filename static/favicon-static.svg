@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 110 110" width="110" height="110">
+  <defs>
+    <clipPath id="canvasClip">
+      <rect x="0" y="0" width="110" height="110" rx="22" />
+    </clipPath>
+    <clipPath id="discClip3">
+      <circle cx="70" cy="55" r="33" />
+    </clipPath>
+    <clipPath id="discClip2">
+      <circle cx="55" cy="55" r="33" />
+    </clipPath>
+    <clipPath id="discClip">
+      <circle cx="40" cy="55" r="33" />
+    </clipPath>
+    <clipPath id="labelClip">
+      <circle cx="40" cy="55" r="9.326" />
+    </clipPath>
+    <linearGradient id="wedgeGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0" />
+      <stop offset="50%" stop-color="#ffffff" stop-opacity="0.4" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+    <filter id="wedgeBlur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="0.05" />
+    </filter>
+  </defs>
+  <g clip-path="url(#canvasClip)">
+    <rect x="0" y="0" width="110" height="110" fill="#ffffff" />
+    <circle cx="70" cy="55" r="33" fill="#FA233B" stroke="#f0f0f0" stroke-width="0.3" />
+    <circle cx="70" cy="55" r="27.082" fill="none" stroke="#ffffff" stroke-opacity="0.4" stroke-width="0.75" />
+    <circle cx="70" cy="55" r="21.163" fill="none" stroke="#ffffff" stroke-opacity="0.4" stroke-width="0.75" />
+    <circle cx="70" cy="55" r="15.245" fill="none" stroke="#ffffff" stroke-opacity="0.4" stroke-width="0.75" />
+    <circle cx="70" cy="55" r="9.326" fill="#f5f1e8" />
+    <circle cx="70" cy="55" r="0.861" fill="#1a1a1a" />
+    <g clip-path="url(#discClip3)">
+      <path transform="translate(40,55) rotate(225) scale(33)" d="M0.12,0 L1.0,-0.42 L1.0,0.42 Z"
+        fill="url(#wedgeGradient)" filter="url(#wedgeBlur)" />
+      <path transform="translate(40,55) rotate(45) scale(33)" d="M0.12,0 L1.0,-0.42 L1.0,0.42 Z"
+        fill="url(#wedgeGradient)" filter="url(#wedgeBlur)" />
+    </g>
+
+    <circle cx="55" cy="55" r="33" fill="#1DB954" stroke="#f0f0f0" stroke-width="0.3" />
+    <circle cx="55" cy="55" r="27.082" fill="none" stroke="#ffffff" stroke-opacity="0.4" stroke-width="0.75" />
+    <circle cx="55" cy="55" r="21.163" fill="none" stroke="#ffffff" stroke-opacity="0.4" stroke-width="0.75" />
+    <circle cx="55" cy="55" r="15.245" fill="none" stroke="#ffffff" stroke-opacity="0.4" stroke-width="0.75" />
+    <circle cx="55" cy="55" r="9.326" fill="#f5f1e8" />
+    <circle cx="55" cy="55" r="0.861" fill="#1a1a1a" />
+    <g clip-path="url(#discClip2)">
+      <path transform="translate(40,55) rotate(225) scale(33)" d="M0.12,0 L1.0,-0.42 L1.0,0.42 Z"
+        fill="url(#wedgeGradient)" filter="url(#wedgeBlur)" />
+      <path transform="translate(40,55) rotate(45) scale(33)" d="M0.12,0 L1.0,-0.42 L1.0,0.42 Z"
+        fill="url(#wedgeGradient)" filter="url(#wedgeBlur)" />
+    </g>
+
+    <circle cx="40" cy="55" r="33" fill="#111111" stroke="#f0f0f0" stroke-width="0.3" />
+    <circle cx="40" cy="55" r="27.082" fill="none" stroke="#ffffff" stroke-opacity="0.4" stroke-width="0.75" />
+    <circle cx="40" cy="55" r="21.163" fill="none" stroke="#ffffff" stroke-opacity="0.4" stroke-width="0.75" />
+    <circle cx="40" cy="55" r="15.245" fill="none" stroke="#ffffff" stroke-opacity="0.4" stroke-width="0.75" />
+    <circle cx="40" cy="55" r="9.326" fill="#f4f7f4" />
+    <g clip-path="url(#labelClip)">
+      <rect transform="translate(40,57.332)" x="-100" y="0" width="200" height="200" fill="#273882" />
+    </g>
+    <circle cx="40" cy="55" r="0.861" fill="#1a1a1a" />
+    <g clip-path="url(#discClip)">
+      <path transform="translate(40,55) rotate(225) scale(33)" d="M0.12,0 L1.0,-0.42 L1.0,0.42 Z"
+        fill="url(#wedgeGradient)" filter="url(#wedgeBlur)" />
+      <path transform="translate(40,55) rotate(45) scale(33)" d="M0.12,0 L1.0,-0.42 L1.0,0.42 Z"
+        fill="url(#wedgeGradient)" filter="url(#wedgeBlur)" />
+    </g>
+  </g>
+</svg>
