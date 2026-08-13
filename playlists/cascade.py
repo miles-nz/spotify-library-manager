@@ -5,13 +5,13 @@ from typing import Any
 
 from spotipy import Spotify
 
-from cancellation import CancelCheck
-from playlist_cache import PlaylistCache
-import duplicates as duplicates_module
-import playlist_filter as playlist_filter_module
-import playlist_cleanup as playlist_cleanup_module
-import playlist_diff as playlist_diff_module
-import sync as sync_module
+from core.cancellation import CancelCheck
+from playlists.playlist_cache import PlaylistCache
+import playlists.duplicates as duplicates_module
+import playlists.playlist_filter as playlist_filter_module
+import playlists.playlist_cleanup as playlist_cleanup_module
+import playlists.playlist_diff as playlist_diff_module
+import core.sync as sync_module
 
 logger = logging.getLogger(__name__)
 

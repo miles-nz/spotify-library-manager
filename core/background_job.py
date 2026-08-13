@@ -4,7 +4,7 @@ import logging
 import threading
 from typing import Any, Callable
 
-from cancellation import CancelCheck, OperationCancelled
+from core.cancellation import CancelCheck, OperationCancelled
 
 _ACTIVE_STATUSES = {"running", "cancelling"}
 

@@ -1,13 +1,14 @@
 {% extends "base.html" %} {% block title %}Track Search - Spotify Library
 Manager{% endblock %} {% block extra_style %} .search-input { font-size: 1.1rem;
 padding: 0.6rem 0.8rem; width: 100%; max-width: 30rem; box-sizing: border-box;
-border: 1px solid #ccc; border-radius: 6px; } .search-input:focus { outline: 2px
-solid #1db954; outline-offset: -1px; } .result { border: 1px solid #ddd;
+border: 1px solid var(--border-light); border-radius: 6px; background: var(--bg);
+color: var(--text); } .search-input:focus { outline: 2px
+solid var(--accent); outline-offset: -1px; } .result { border: 1px solid var(--border);
 border-radius: 8px; padding: 1rem; margin: 0.75rem 0; } .result-title { display:
 flex; align-items: center; gap: 0.6rem; font-weight: bold; margin-bottom:
 0.5rem; } .result-thumb { width: 2.5rem; height: 2.5rem; border-radius: 4px;
-object-fit: cover; background: #ddd; flex-shrink: 0; } .result-embed { border:
-none; border-radius: 12px; width: 100%; height: 80px; } {% endblock %} {% block
+object-fit: cover; background: var(--thumb-bg); flex-shrink: 0; } .result-embed { border:
+none; border-radius: 12px; width: 100%; height: 80px; background: var(--bg); } {% endblock %} {% block
 content %}
 <h1>Track Search</h1>
 <p>

@@ -5,7 +5,7 @@ import re
 
 from spotipy import Spotify
 
-from cancellation import CancelCheck, check_cancelled
+from core.cancellation import CancelCheck, check_cancelled
 
 ADD_BATCH_SIZE = 100
 

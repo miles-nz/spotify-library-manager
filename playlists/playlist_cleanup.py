@@ -5,8 +5,8 @@ from datetime import datetime, timedelta, timezone
 
 from spotipy import Spotify
 
-from cancellation import CancelCheck, check_cancelled
-import playlist_filter
+from core.cancellation import CancelCheck, check_cancelled
+import playlists.playlist_filter as playlist_filter
 
 REMOVE_BATCH_SIZE = 100
 

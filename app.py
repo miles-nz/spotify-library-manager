@@ -8,14 +8,14 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, render_template, request, url_for
 from spotipy import Spotify
 
-from background_job import BackgroundJob
-from spotify_client import make_oauth, get_authenticated_client
-from sync import apply_diff, get_target_diff
-import cascade as cascade_module
-import duplicates as duplicates_module
-import playlist_filter as playlist_filter_module
-import playlist_cleanup as playlist_cleanup_module
-import playlist_diff as playlist_diff_module
+from core.background_job import BackgroundJob
+from spotify.spotify_client import make_oauth, get_authenticated_client
+from core.sync import apply_diff, get_target_diff
+import playlists.cascade as cascade_module
+import playlists.duplicates as duplicates_module
+import playlists.playlist_filter as playlist_filter_module
+import playlists.playlist_cleanup as playlist_cleanup_module
+import playlists.playlist_diff as playlist_diff_module
 
 load_dotenv()
 
@@ -29,12 +29,12 @@ NAME_LOOKUP_THRESHOLD = 200
 
 app = Flask(__name__)
 
-_sync_job = BackgroundJob(["sync", "app"])
-_dup_job = BackgroundJob(["duplicates", "app"])
-_filter_job = BackgroundJob(["playlist_filter", "app"])
-_cleanup_job = BackgroundJob(["playlist_cleanup", "app"])
-_diff_job = BackgroundJob(["playlist_diff", "app"])
-_cascade_job = BackgroundJob(["playlist_cache", "app"])
+_sync_job = BackgroundJob(["core.sync", "app"])
+_dup_job = BackgroundJob(["playlists.duplicates", "app"])
+_filter_job = BackgroundJob(["playlists.playlist_filter", "app"])
+_cleanup_job = BackgroundJob(["playlists.playlist_cleanup", "app"])
+_diff_job = BackgroundJob(["playlists.playlist_diff", "app"])
+_cascade_job = BackgroundJob(["playlists.playlist_cache", "app"])
 _cascade_run: cascade_module.CascadeRun | None = None
 
 

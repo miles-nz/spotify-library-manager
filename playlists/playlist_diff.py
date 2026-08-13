@@ -4,8 +4,8 @@ import logging
 
 from spotipy import Spotify
 
-from cancellation import CancelCheck, check_cancelled
-import playlist_filter
+from core.cancellation import CancelCheck, check_cancelled
+import playlists.playlist_filter as playlist_filter
 
 logger = logging.getLogger(__name__)
 

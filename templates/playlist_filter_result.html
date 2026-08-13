@@ -1,8 +1,8 @@
 {% extends "base.html" %} {% block title %}Matches - Spotify Library Manager{%
 endblock %} {% block extra_style %} .version-warning { display: none;
-color: #b45309; font-size: 0.85rem; flex-basis: 100%; margin-left: 1.6rem; }
+color: var(--warning); font-size: 0.85rem; flex-basis: 100%; margin-left: 1.6rem; }
 #matches-list.show-version-warnings .version-warning { display: block; }
-#version-check-summary { color: #b45309; } {% endblock %} {% block content %}
+#version-check-summary { color: var(--warning); } {% endblock %} {% block content %}
 <h1>Matches</h1>
 
 {% if cascade_step %}

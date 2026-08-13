@@ -2,7 +2,7 @@
 Spotify Library Manager{% endblock %} {% block extra_style %} pre { background:
 #111; color: #ddd; padding: 1rem; border-radius: 6px; max-height: 20rem;
 overflow-y: auto; white-space: pre-wrap; word-break: break-word; font-size:
-0.85rem; } .error { color: #b91c1c; } {% endblock %} {% block content %}
+0.85rem; } .error { color: var(--error); } {% endblock %} {% block content %}
 <h1>
     <span class="spinner" id="spinner"></span
     ><span id="heading">{{ heading | default('Working…') }}</span>
