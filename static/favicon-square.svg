@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 110 110" width="110" height="110">
+  <style>
+    :root {
+      --disc-x: 40; --disc-y: 55;
+      --disc2-x: 55; --disc2-y: 55;
+      --disc3-x: 70; --disc3-y: 55;
+      --disc-r: 33;
+    }
+    .disc-center { cx: var(--disc-x); cy: var(--disc-y); }
+    .disc-center-2 { cx: var(--disc2-x); cy: var(--disc2-y); }
+    .disc-center-3 { cx: var(--disc3-x); cy: var(--disc3-y); }
+    .disc-outer { r: var(--disc-r); }
+    .disc-ring-1 { r: calc(var(--disc-r) * 37.75 / 46); }
+    .disc-ring-2 { r: calc(var(--disc-r) * 29.5 / 46); }
+    .disc-ring-2b { r: calc(var(--disc-r) * 21.25 / 46); }
+    .disc-ring-3 { r: calc(var(--disc-r) * 13 / 46); }
+    .disc-hole { r: calc(var(--disc-r) * 1.2 / 46); }
+    .label-band-front { transform: translate(calc(var(--disc-x) * 1px), calc((var(--disc-y) + var(--disc-r) * 13 / 46 * 0.25) * 1px)); }
+    .shine-wedge-tl-back { transform: translate(calc(var(--disc-x) * 1px), calc(var(--disc-y) * 1px)) rotate(225deg) scale(var(--disc-r)); }
+    .shine-wedge-br-back { transform: translate(calc(var(--disc-x) * 1px), calc(var(--disc-y) * 1px)) rotate(45deg) scale(var(--disc-r)); }
+    .shine-wedge-tl-mid { transform: translate(calc(var(--disc-x) * 1px), calc(var(--disc-y) * 1px)) rotate(225deg) scale(var(--disc-r)); }
+    .shine-wedge-br-mid { transform: translate(calc(var(--disc-x) * 1px), calc(var(--disc-y) * 1px)) rotate(45deg) scale(var(--disc-r)); }
+    .shine-wedge-tl-front { transform: translate(calc(var(--disc-x) * 1px), calc(var(--disc-y) * 1px)) rotate(225deg) scale(var(--disc-r)); }
+    .shine-wedge-br-front { transform: translate(calc(var(--disc-x) * 1px), calc(var(--disc-y) * 1px)) rotate(45deg) scale(var(--disc-r)); }
+  </style>
+  <defs>
+    <clipPath id="canvasClip">
+      <rect x="0" y="0" width="110" height="110" />
+    </clipPath>
+    <clipPath id="discClip3">
+      <circle class="disc-center-3 disc-outer" />
+    </clipPath>
+    <clipPath id="discClip2">
+      <circle class="disc-center-2 disc-outer" />
+    </clipPath>
+    <clipPath id="discClip">
+      <circle class="disc-center disc-outer" />
+    </clipPath>
+    <clipPath id="labelClip">
+      <circle class="disc-center disc-ring-3" />
+    </clipPath>
+    <linearGradient id="wedgeGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0" />
+      <stop offset="50%" stop-color="#ffffff" stop-opacity="0.4" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+    <filter id="wedgeBlur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="0.05" />
+    </filter>
+  </defs>
+  <g clip-path="url(#canvasClip)">
+    <rect x="0" y="0" width="110" height="110" fill="#ffffff" />
+    <circle class="disc-center-3 disc-outer" fill="#FA233B" stroke="#f0f0f0" stroke-width="0.3" />
+    <circle class="disc-center-3 disc-ring-1" fill="none" stroke="#ffffff" stroke-opacity="0.4"
+      stroke-width="0.75" />
+    <circle class="disc-center-3 disc-ring-2" fill="none" stroke="#ffffff" stroke-opacity="0.4"
+      stroke-width="0.75" />
+    <circle class="disc-center-3 disc-ring-2b" fill="none" stroke="#ffffff" stroke-opacity="0.4"
+      stroke-width="0.75" />
+    <circle class="disc-center-3 disc-ring-3" fill="#f5f1e8" />
+    <circle class="disc-center-3 disc-hole" fill="#1a1a1a" />
+    <g clip-path="url(#discClip3)">
+      <path class="shine-wedge-tl-back" d="M0.12,0 L1.0,-0.42 L1.0,0.42 Z"
+        fill="url(#wedgeGradient)" filter="url(#wedgeBlur)" />
+      <path class="shine-wedge-br-back" d="M0.12,0 L1.0,-0.42 L1.0,0.42 Z"
+        fill="url(#wedgeGradient)" filter="url(#wedgeBlur)" />
+    </g>
+
+    <circle class="disc-center-2 disc-outer" fill="#1DB954" stroke="#f0f0f0" stroke-width="0.3" />
+    <circle class="disc-center-2 disc-ring-1" fill="none" stroke="#ffffff" stroke-opacity="0.4"
+      stroke-width="0.75" />
+    <circle class="disc-center-2 disc-ring-2" fill="none" stroke="#ffffff" stroke-opacity="0.4"
+      stroke-width="0.75" />
+    <circle class="disc-center-2 disc-ring-2b" fill="none" stroke="#ffffff" stroke-opacity="0.4"
+      stroke-width="0.75" />
+    <circle class="disc-center-2 disc-ring-3" fill="#f5f1e8" />
+    <circle class="disc-center-2 disc-hole" fill="#1a1a1a" />
+    <g clip-path="url(#discClip2)">
+      <path class="shine-wedge-tl-mid" d="M0.12,0 L1.0,-0.42 L1.0,0.42 Z" fill="url(#wedgeGradient)"
+        filter="url(#wedgeBlur)" />
+      <path class="shine-wedge-br-mid" d="M0.12,0 L1.0,-0.42 L1.0,0.42 Z" fill="url(#wedgeGradient)"
+        filter="url(#wedgeBlur)" />
+    </g>
+
+    <circle class="disc-center disc-outer" fill="#111111" stroke="#f0f0f0" stroke-width="0.3" />
+    <circle class="disc-center disc-ring-1" fill="none" stroke="#ffffff" stroke-opacity="0.4"
+      stroke-width="0.75" />
+    <circle class="disc-center disc-ring-2" fill="none" stroke="#ffffff" stroke-opacity="0.4"
+      stroke-width="0.75" />
+    <circle class="disc-center disc-ring-2b" fill="none" stroke="#ffffff" stroke-opacity="0.4"
+      stroke-width="0.75" />
+    <circle class="disc-center disc-ring-3" fill="#f4f7f4" />
+    <g clip-path="url(#labelClip)">
+      <rect class="label-band-front" x="-100" y="0" width="200" height="200" fill="#273882" />
+    </g>
+    <circle class="disc-center disc-hole" fill="#1a1a1a" />
+    <g clip-path="url(#discClip)">
+      <path class="shine-wedge-tl-front" d="M0.12,0 L1.0,-0.42 L1.0,0.42 Z"
+        fill="url(#wedgeGradient)" filter="url(#wedgeBlur)" />
+      <path class="shine-wedge-br-front" d="M0.12,0 L1.0,-0.42 L1.0,0.42 Z"
+        fill="url(#wedgeGradient)" filter="url(#wedgeBlur)" />
+    </g>
+  </g>
+</svg>
