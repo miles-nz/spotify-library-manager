@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 
@@ -10,9 +11,11 @@ from spotipy import Spotify
 from background_job import BackgroundJob
 from spotify_client import make_oauth, get_authenticated_client
 from sync import apply_diff, get_target_diff
+import cascade as cascade_module
 import duplicates as duplicates_module
 import playlist_filter as playlist_filter_module
 import playlist_cleanup as playlist_cleanup_module
+import playlist_diff as playlist_diff_module
 
 load_dotenv()
 
@@ -30,6 +33,9 @@ _sync_job = BackgroundJob(["sync", "app"])
 _dup_job = BackgroundJob(["duplicates", "app"])
 _filter_job = BackgroundJob(["playlist_filter", "app"])
 _cleanup_job = BackgroundJob(["playlist_cleanup", "app"])
+_diff_job = BackgroundJob(["playlist_diff", "app"])
+_cascade_job = BackgroundJob(["playlist_cache", "app"])
+_cascade_run: cascade_module.CascadeRun | None = None
 
 
 def _credentials_configured() -> bool:
@@ -135,6 +141,101 @@ def _run_playlist_cleanup_scan(
         }
 
     return target
+
+
+def _run_playlist_diff_scan(source_ids: list[str], target_ids: list[str]):
+    def target(cancel_check):
+        sp = get_authenticated_client()
+        sources = [
+            {"id": pid, "name": sp.playlist(pid, fields="name")["name"]}
+            for pid in source_ids
+        ]
+        targets = [
+            {"id": pid, "name": sp.playlist(pid, fields="name")["name"]}
+            for pid in target_ids
+        ]
+        missing = playlist_diff_module.find_missing(
+            sp, sources, targets, cancel_check=cancel_check
+        )
+        return {"missing": missing, "targets": targets}
+
+    return target
+
+
+def _run_cascade_prefetch(run: cascade_module.CascadeRun):
+    def target(cancel_check):
+        sp = get_authenticated_client()
+        run.prefetch(sp, cancel_check)
+
+    return target
+
+
+def _cascade_step_view(sp: Spotify, run: cascade_module.CascadeRun):
+    """Returns (template_name, context) for the current step's result,
+    reusing each function's own result template with a cascade banner and
+    an apply action pointed at /cascade/step/apply."""
+    step = run.current_step
+    result = run.scan_current()
+    step_type = step["type"]
+    banner = {
+        "cascade_step": run.index + 1,
+        "cascade_total": len(run.steps),
+        "cascade_label": cascade_module.STEP_LABELS[step_type],
+        "form_action": url_for("cascade_step_apply"),
+        "cancel_url": url_for("cascade_picker"),
+    }
+
+    if step_type == "duplicates":
+        return "duplicates_result.html", {"duplicates": result, **banner}
+
+    if step_type == "playlist_filter":
+        destination_label = (
+            result["destination_name"]
+            if result["destination_mode"] == "new"
+            else result["destination_playlist_name"]
+        )
+        return "playlist_filter_result.html", {
+            "matches": result["matches"],
+            "destination_label": destination_label,
+            "destination_mode": result["destination_mode"],
+            "already_in_destination": result["already_in_destination"],
+            "similar_versions": result.get("similar_versions", {}),
+            **banner,
+        }
+
+    if step_type == "playlist_cleanup":
+        return "playlist_cleanup_result.html", {
+            "playlist_name": result["playlist_name"],
+            "removals": result["removals"],
+            **banner,
+        }
+
+    if step_type == "playlist_diff":
+        return "playlist_diff_result.html", {
+            "missing": result["missing"],
+            "targets": result["targets"],
+            **banner,
+        }
+
+    if step_type == "sync":
+        to_add, to_remove = result["to_add"], result["to_remove"]
+        if len(to_add) + len(to_remove) > NAME_LOOKUP_THRESHOLD:
+            return "diff.html", {
+                "add_count": len(to_add),
+                "remove_count": len(to_remove),
+                "names_loaded": False,
+                **banner,
+            }
+        return "diff.html", {
+            "add_count": len(to_add),
+            "remove_count": len(to_remove),
+            "add_labels": _track_labels(sp, to_add),
+            "remove_labels": _track_labels(sp, to_remove),
+            "names_loaded": True,
+            **banner,
+        }
+
+    raise ValueError(f"unknown step type {step_type!r}")
 
 
 @app.route("/")
@@ -674,6 +775,224 @@ def playlist_cleanup_remove():
     return render_template(
         "playlist_cleanup_done.html", removed=len(selected_uris), playlist_name=playlist_name
     )
+
+
+# --- Playlist Diff -------------------------------------------------------
+
+
+@app.route("/playlist-diff")
+def playlist_diff_picker():
+    if not _credentials_configured():
+        return render_template("playlist_diff.html", needs_credentials=True)
+
+    sp = get_authenticated_client()
+    return render_template(
+        "playlist_diff.html",
+        needs_credentials=False,
+        logged_in=sp is not None,
+    )
+
+
+@app.route("/playlist-diff/scan")
+def playlist_diff_scan():
+    if not _credentials_configured():
+        return redirect(url_for("home"))
+
+    sp = get_authenticated_client()
+    if sp is None:
+        return redirect(url_for("login"))
+
+    source_ids = request.args.getlist("source_id")
+    target_ids = request.args.getlist("target_id")
+    if not source_ids or not target_ids:
+        return redirect(url_for("playlist_diff_picker"))
+
+    _diff_job.start(_run_playlist_diff_scan(source_ids, target_ids))
+
+    return render_template(
+        "progress.html",
+        status_url=url_for("playlist_diff_scan_status"),
+        cancel_url=url_for("playlist_diff_scan_cancel"),
+        result_url=url_for("playlist_diff_scan_result"),
+        back_url=url_for("playlist_diff_picker"),
+        heading="Scanning playlists…",
+        description="Reading your playlists to find missing tracks. This can take a few minutes for large libraries.",
+    )
+
+
+@app.route("/playlist-diff/scan/status")
+def playlist_diff_scan_status():
+    return jsonify(_diff_job.status())
+
+
+@app.route("/playlist-diff/scan/cancel", methods=["POST"])
+def playlist_diff_scan_cancel():
+    _diff_job.cancel()
+    return jsonify({"ok": True})
+
+
+@app.route("/playlist-diff/scan/result")
+def playlist_diff_scan_result():
+    if not _credentials_configured():
+        return redirect(url_for("home"))
+
+    sp = get_authenticated_client()
+    if sp is None:
+        return redirect(url_for("login"))
+
+    result = _diff_job.result
+    if result is None:
+        return redirect(url_for("playlist_diff_picker"))
+
+    return render_template(
+        "playlist_diff_result.html",
+        missing=result["missing"],
+        targets=result["targets"],
+    )
+
+
+@app.route("/playlist-diff/add", methods=["POST"])
+def playlist_diff_add():
+    if not _credentials_configured():
+        return redirect(url_for("home"))
+
+    sp = get_authenticated_client()
+    if sp is None:
+        return redirect(url_for("login"))
+
+    result = _diff_job.result
+    if result is None:
+        return redirect(url_for("playlist_diff_picker"))
+
+    missing_uris = {t["uri"] for t in result["missing"]}
+    target_ids = {t["id"] for t in result["targets"]}
+
+    additions = []
+    for item in request.form.getlist("add"):
+        uri, _, playlist_id = item.partition("::")
+        if uri in missing_uris and playlist_id in target_ids:
+            additions.append({"playlist_id": playlist_id, "uri": uri})
+
+    added_counts = playlist_diff_module.add_to_playlists(sp, additions)
+    targets_by_id = {t["id"]: t["name"] for t in result["targets"]}
+    added_summary = [
+        {"name": targets_by_id[pid], "added": count}
+        for pid, count in added_counts.items()
+    ]
+    _diff_job.result = None
+
+    return render_template("playlist_diff_done.html", added_summary=added_summary)
+
+
+# --- Cascade ---------------------------------------------------------
+
+
+@app.route("/cascade")
+def cascade_picker():
+    if not _credentials_configured():
+        return render_template("cascade.html", needs_credentials=True)
+
+    sp = get_authenticated_client()
+    return render_template(
+        "cascade.html",
+        needs_credentials=False,
+        logged_in=sp is not None,
+    )
+
+
+@app.route("/cascade/start", methods=["POST"])
+def cascade_start():
+    global _cascade_run
+
+    if not _credentials_configured():
+        return redirect(url_for("home"))
+
+    sp = get_authenticated_client()
+    if sp is None:
+        return redirect(url_for("login"))
+
+    try:
+        steps = json.loads(request.form.get("steps", "[]"))
+    except (TypeError, ValueError):
+        steps = []
+    if not steps:
+        return redirect(url_for("cascade_picker"))
+
+    _cascade_run = cascade_module.CascadeRun(steps)
+    _cascade_job.start(_run_cascade_prefetch(_cascade_run))
+
+    return render_template(
+        "progress.html",
+        status_url=url_for("cascade_scan_status"),
+        cancel_url=url_for("cascade_scan_cancel"),
+        result_url=url_for("cascade_step"),
+        back_url=url_for("cascade_picker"),
+        heading="Fetching playlists…",
+        description="Reading each playlist your cascade needs once, no matter how many steps use it. This can take a few minutes for large libraries.",
+    )
+
+
+@app.route("/cascade/scan/status")
+def cascade_scan_status():
+    return jsonify(_cascade_job.status())
+
+
+@app.route("/cascade/scan/cancel", methods=["POST"])
+def cascade_scan_cancel():
+    _cascade_job.cancel()
+    return jsonify({"ok": True})
+
+
+@app.route("/cascade/step")
+def cascade_step():
+    if not _credentials_configured():
+        return redirect(url_for("home"))
+
+    sp = get_authenticated_client()
+    if sp is None:
+        return redirect(url_for("login"))
+
+    if _cascade_run is None:
+        return redirect(url_for("cascade_picker"))
+    if _cascade_run.is_done:
+        return redirect(url_for("cascade_done"))
+
+    template_name, context = _cascade_step_view(sp, _cascade_run)
+    return render_template(template_name, **context)
+
+
+@app.route("/cascade/step/apply", methods=["POST"])
+def cascade_step_apply():
+    if not _credentials_configured():
+        return redirect(url_for("home"))
+
+    sp = get_authenticated_client()
+    if sp is None:
+        return redirect(url_for("login"))
+
+    if _cascade_run is None:
+        return redirect(url_for("cascade_picker"))
+
+    _cascade_run.apply_current(sp, request.form)
+
+    if _cascade_run.is_done:
+        return redirect(url_for("cascade_done"))
+    return redirect(url_for("cascade_step"))
+
+
+@app.route("/cascade/done")
+def cascade_done():
+    if not _credentials_configured():
+        return redirect(url_for("home"))
+
+    sp = get_authenticated_client()
+    if sp is None:
+        return redirect(url_for("login"))
+
+    if _cascade_run is None:
+        return redirect(url_for("cascade_picker"))
+
+    return render_template("cascade_done.html", summaries=_cascade_run.summaries)
 
 
 if __name__ == "__main__":

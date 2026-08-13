@@ -50,22 +50,19 @@ def matches_criterion(
     return playlist_filter.matches_criterion(track, field, operator, value, value2)
 
 
-def find_removals(
-    sp: Spotify,
-    playlist_id: str,
+def find_removals_from_tracks(
     playlist_name: str,
+    tracks: list[dict],
     field: str,
     operator: str,
     value: str,
     value2: str | None,
-    cancel_check: CancelCheck | None = None,
 ) -> list[dict]:
-    """Returns tracks in the playlist that do NOT match the keep-criterion,
+    """tracks: already-fetched tracks for the playlist.
+
+    Returns tracks in the playlist that do NOT match the keep-criterion,
     sorted by artist/name: [{"uri", "name", "artists", "added_at"}, ...]
     """
-    tracks = playlist_filter.get_playlist_tracks(sp, playlist_id, playlist_name, cancel_check)
-    check_cancelled(cancel_check)
-
     removals = [
         {
             "uri": t["uri"],
@@ -84,6 +81,21 @@ def find_removals(
         len(tracks),
     )
     return removals
+
+
+def find_removals(
+    sp: Spotify,
+    playlist_id: str,
+    playlist_name: str,
+    field: str,
+    operator: str,
+    value: str,
+    value2: str | None,
+    cancel_check: CancelCheck | None = None,
+) -> list[dict]:
+    tracks = playlist_filter.get_playlist_tracks(sp, playlist_id, playlist_name, cancel_check)
+    check_cancelled(cancel_check)
+    return find_removals_from_tracks(playlist_name, tracks, field, operator, value, value2)
 
 
 def _chunks(items: list, size: int):

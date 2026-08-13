@@ -3,9 +3,19 @@
 {% block content %}
   <h1>Tracks to Remove</h1>
 
+  {% if cascade_step %}
+  <p class="cascade-banner">Step {{ cascade_step }} of {{ cascade_total }} — {{ cascade_label }}</p>
+  {% endif %}
+
   {% if not removals %}
     <p class="hint">Everything in "{{ playlist_name }}" already matches your rule — nothing to remove.</p>
+    {% if cascade_step %}
+    <form method="post" action="{{ form_action or url_for('playlist_cleanup_remove') }}">
+      <button class="button" type="submit">Continue</button>
+    </form>
+    {% else %}
     <p><a class="button" href="{{ url_for('playlist_cleanup_picker') }}">Back</a></p>
+    {% endif %}
   {% else %}
     <p>
       Found {{ removals|length }} track{{ 's' if removals|length != 1 else '' }} in
@@ -13,7 +23,7 @@
       Uncheck any you want to keep.
     </p>
 
-    <form method="post" action="{{ url_for('playlist_cleanup_remove') }}">
+    <form method="post" action="{{ form_action or url_for('playlist_cleanup_remove') }}">
       <div id="matches-list">
         {% for track in removals %}
           <label class="match">
@@ -26,7 +36,7 @@
 
       <p style="margin-top: 1.5rem;">
         <button class="button" type="submit">Remove selected</button>
-        <a class="button secondary" href="{{ url_for('playlist_cleanup_picker') }}">Cancel</a>
+        <a class="button secondary" href="{{ cancel_url or url_for('playlist_cleanup_picker') }}">Cancel</a>
       </p>
     </form>
   {% endif %}

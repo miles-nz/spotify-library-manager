@@ -107,16 +107,15 @@ def matches_criterion(
     return False
 
 
-def find_matches(
-    sp: Spotify,
+def find_matches_from_tracks(
     source_playlists: list[dict],
     field: str,
     operator: str,
     value: str,
     value2: str | None,
-    cancel_check: CancelCheck | None = None,
 ) -> list[dict]:
-    """source_playlists: [{"id": ..., "name": ...}, ...]
+    """source_playlists: [{"id": ..., "name": ..., "tracks": [...]}, ...]
+    with already-fetched tracks.
 
     Returns matching tracks, deduped by uri across source playlists, sorted
     by artist/name: [{"uri", "name", "artists"}]
@@ -124,10 +123,7 @@ def find_matches(
     seen: dict[str, dict] = {}
 
     for playlist in source_playlists:
-        logger.info("fetching playlist '%s'", playlist["name"])
-        tracks = get_playlist_tracks(sp, playlist["id"], playlist["name"], cancel_check)
-        check_cancelled(cancel_check)
-        for track in tracks:
+        for track in playlist["tracks"]:
             if track["uri"] in seen:
                 continue
             if matches_criterion(track, field, operator, value, value2):
@@ -144,6 +140,26 @@ def find_matches(
         len(source_playlists),
     )
     return matches
+
+
+def find_matches(
+    sp: Spotify,
+    source_playlists: list[dict],
+    field: str,
+    operator: str,
+    value: str,
+    value2: str | None,
+    cancel_check: CancelCheck | None = None,
+) -> list[dict]:
+    """source_playlists: [{"id": ..., "name": ...}, ...]"""
+    fetched = []
+    for playlist in source_playlists:
+        logger.info("fetching playlist '%s'", playlist["name"])
+        tracks = get_playlist_tracks(sp, playlist["id"], playlist["name"], cancel_check)
+        check_cancelled(cancel_check)
+        fetched.append({"id": playlist["id"], "name": playlist["name"], "tracks": tracks})
+
+    return find_matches_from_tracks(fetched, field, operator, value, value2)
 
 
 def get_playlist_track_uris(
@@ -241,10 +257,11 @@ def _chunks(items: list, size: int):
         yield items[i : i + size]
 
 
-def add_tracks_to_playlist(sp: Spotify, playlist_id: str, uris: list[str]) -> tuple[int, int]:
-    """Adds uris not already present in the playlist. Returns (added, skipped)."""
-    existing = get_playlist_track_uris(sp, playlist_id)
-    to_add = [uri for uri in uris if uri not in existing]
+def add_new_tracks_to_playlist(
+    sp: Spotify, playlist_id: str, uris: list[str], existing_uris
+) -> tuple[int, int]:
+    """Adds uris not already in existing_uris. Returns (added, skipped)."""
+    to_add = [uri for uri in uris if uri not in existing_uris]
     skipped = len(uris) - len(to_add)
 
     batches = list(_chunks(to_add, ADD_BATCH_SIZE))
@@ -260,3 +277,9 @@ def add_tracks_to_playlist(sp: Spotify, playlist_id: str, uris: list[str]) -> tu
         sp.playlist_add_items(playlist_id, batch)
 
     return len(to_add), skipped
+
+
+def add_tracks_to_playlist(sp: Spotify, playlist_id: str, uris: list[str]) -> tuple[int, int]:
+    """Adds uris not already present in the playlist. Returns (added, skipped)."""
+    existing = get_playlist_track_uris(sp, playlist_id)
+    return add_new_tracks_to_playlist(sp, playlist_id, uris, existing)

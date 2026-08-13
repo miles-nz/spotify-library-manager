@@ -5,6 +5,10 @@ color: #b45309; font-size: 0.85rem; flex-basis: 100%; margin-left: 1.6rem; }
 #version-check-summary { color: #b45309; } {% endblock %} {% block content %}
 <h1>Matches</h1>
 
+{% if cascade_step %}
+<p class="cascade-banner">Step {{ cascade_step }} of {{ cascade_total }} — {{ cascade_label }}</p>
+{% endif %}
+
 {% if not matches %} {% if already_in_destination %}
 <p class="hint">
     {{ already_in_destination }} track{{ 's' if already_in_destination != 1 else
@@ -15,7 +19,13 @@ color: #b45309; font-size: 0.85rem; flex-basis: 100%; margin-left: 1.6rem; }
 {% else %}
 <p class="hint">No tracks matched that condition.</p>
 {% endif %}
+{% if cascade_step %}
+<form method="post" action="{{ form_action or url_for('playlist_filter_apply') }}">
+    <button class="button" type="submit">Continue</button>
+</form>
+{% else %}
 <p><a class="button" href="{{ url_for('playlist_filter_picker') }}">Back</a></p>
+{% endif %}
 {% else %}
 <p>
     {% if destination_mode == 'new' %} Found {{ matches|length }} matching
@@ -38,7 +48,7 @@ color: #b45309; font-size: 0.85rem; flex-basis: 100%; margin-left: 1.6rem; }
 <p id="version-check-summary" style="display: none"></p>
 {% endif %}
 
-<form method="post" action="{{ url_for('playlist_filter_apply') }}">
+<form method="post" action="{{ form_action or url_for('playlist_filter_apply') }}">
     <div id="matches-list">
         {% for track in matches %}
         <label class="match">
@@ -65,7 +75,7 @@ color: #b45309; font-size: 0.85rem; flex-basis: 100%; margin-left: 1.6rem; }
         <button class="button" type="submit">Add to playlist</button>
         <a
             class="button secondary"
-            href="{{ url_for('playlist_filter_picker') }}"
+            href="{{ cancel_url or url_for('playlist_filter_picker') }}"
             >Cancel</a
         >
     </p>

@@ -41,10 +41,10 @@ def get_playlist_tracks(
     return tracks
 
 
-def find_duplicates(
-    sp: Spotify, playlists: list[dict], cancel_check: CancelCheck | None = None
-) -> list[dict]:
-    """playlists: [{"id": ..., "name": ...}, ...]
+def find_duplicates_from_tracks(playlists: list[dict]) -> list[dict]:
+    """playlists: [{"id": ..., "name": ..., "tracks": [...]}, ...] with
+    already-fetched tracks (each needing "uri", "name", "artists",
+    "added_at").
 
     Returns duplicate groups, sorted by artist/name:
     [{"uri", "name", "artists",
@@ -54,10 +54,7 @@ def find_duplicates(
     track_meta: dict[str, tuple[str, str]] = {}
 
     for playlist in playlists:
-        logger.info("fetching playlist '%s'", playlist["name"])
-        tracks = get_playlist_tracks(sp, playlist["id"], playlist["name"], cancel_check)
-        check_cancelled(cancel_check)
-        for track in tracks:
+        for track in playlist["tracks"]:
             occurrences_by_uri.setdefault(track["uri"], []).append(
                 {
                     "playlist_id": playlist["id"],
@@ -85,6 +82,20 @@ def find_duplicates(
         "found %d duplicate track(s) across %d playlists", len(duplicates), len(playlists)
     )
     return duplicates
+
+
+def find_duplicates(
+    sp: Spotify, playlists: list[dict], cancel_check: CancelCheck | None = None
+) -> list[dict]:
+    """playlists: [{"id": ..., "name": ...}, ...]"""
+    fetched = []
+    for playlist in playlists:
+        logger.info("fetching playlist '%s'", playlist["name"])
+        tracks = get_playlist_tracks(sp, playlist["id"], playlist["name"], cancel_check)
+        check_cancelled(cancel_check)
+        fetched.append({"id": playlist["id"], "name": playlist["name"], "tracks": tracks})
+
+    return find_duplicates_from_tracks(fetched)
 
 
 def _chunks(items: list, size: int):
