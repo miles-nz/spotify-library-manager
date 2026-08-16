@@ -1,4 +1,4 @@
-# spotify-library-manager
+# Rotation
 
 A small local web app with a homepage listing Spotify library-management
 functions. Currently available:

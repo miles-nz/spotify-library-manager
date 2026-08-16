@@ -1,6 +1,6 @@
 {
-  "name": "Spotify Library Manager",
-  "short_name": "Library Manager",
+  "name": "Rotation",
+  "short_name": "Rotation",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

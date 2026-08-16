@@ -1,20 +1,19 @@
-{% extends "base.html" %} {% block title %}Duplicates - Spotify Library
-Manager{% endblock %} {% block extra_style %} .dup-group { border: 1px solid
-var(--border); border-radius: 8px; padding: 1rem; margin: 0.75rem 0; } .dup-title {
+{% extends "base.html" %} {% block title %}Duplicates - Rotation{% endblock %}
+{% block extra_style %} .dup-group { border: 1px solid var(--border);
+border-radius: 8px; padding: 1rem; margin: 0.75rem 0; } .dup-title {
 font-weight: bold; margin-bottom: 0.5rem; } .dup-embed { border: none;
-border-radius: 12px; width: 100%; height: 80px; margin-bottom: 0.5rem; background: var(--bg); }
-.occurrence { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem
-0; cursor: pointer; } .occurrence .playlist-name { flex: 1; } .occurrence
-.added-date { color: var(--muted); font-size: 0.85rem; } {% endblock %} {% block content
-%}
+border-radius: 12px; width: 100%; height: 80px; margin-bottom: 0.5rem;
+background: var(--bg); } .occurrence { display: flex; align-items: center; gap:
+0.5rem; padding: 0.5rem 0; cursor: pointer; } .occurrence .playlist-name { flex:
+1; } .occurrence .added-date { color: var(--muted); font-size: 0.85rem; } {%
+endblock %} {% block content %}
 <h1>Duplicates</h1>
 
 {% if cascade_step %}
-<p class="cascade-banner">Step {{ cascade_step }} of {{ cascade_total }} — {{ cascade_label }}</p>
-{% endif %}
-
-{% if not duplicates %}
-{% if cascade_step %}
+<p class="cascade-banner">
+    Step {{ cascade_step }} of {{ cascade_total }} - {{ cascade_label }}
+</p>
+{% endif %} {% if not duplicates %} {% if cascade_step %}
 <p class="hint">No duplicates found across these playlists.</p>
 <form method="post" action="{{ form_action or url_for('duplicates_remove') }}">
     <button class="button" type="submit">Continue</button>
@@ -22,8 +21,7 @@ border-radius: 12px; width: 100%; height: 80px; margin-bottom: 0.5rem; backgroun
 {% else %}
 <p class="hint">No duplicates found across the selected playlists.</p>
 <p><a class="button" href="{{ url_for('duplicates_picker') }}">Back</a></p>
-{% endif %}
-{% else %}
+{% endif %} {% else %}
 <p>
     Found {{ duplicates|length }} track{{ 's' if duplicates|length != 1 else ''
     }} that {{ 'appear' if duplicates|length != 1 else 'appears' }} in more than
@@ -64,7 +62,9 @@ border-radius: 12px; width: 100%; height: 80px; margin-bottom: 0.5rem; backgroun
     {% endfor %}
     <p style="margin-top: 1.5rem">
         <button class="button" type="submit">Remove selected</button>
-        <a class="button secondary" href="{{ cancel_url or url_for('duplicates_picker') }}"
+        <a
+            class="button secondary"
+            href="{{ cancel_url or url_for('duplicates_picker') }}"
             >Cancel</a
         >
     </p>

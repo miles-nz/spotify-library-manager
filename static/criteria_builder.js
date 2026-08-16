@@ -59,7 +59,10 @@ function describeCriterion(criterion) {
         );
     }
     let desc =
-        FIELD_LABELS[criterion.field] + " " + OPERATOR_LABELS[criterion.operator] + " ";
+        FIELD_LABELS[criterion.field] +
+        " " +
+        OPERATOR_LABELS[criterion.operator] +
+        " ";
     if (criterion.field === "explicit") {
         desc += criterion.value === "yes" ? "yes" : "no";
     } else if (criterion.operator === "between") {
@@ -157,7 +160,10 @@ function buildCriteriaBuilder(container, fieldOperators, fieldOrder, initial) {
         }
 
         const input1 = document.createElement("input");
-        input1.type = field === "release_year" || field === "popularity" ? "number" : "text";
+        input1.type =
+            field === "release_year" || field === "popularity"
+                ? "number"
+                : "text";
         input1.className = "value-input";
         input1.placeholder =
             field === "release_year"
@@ -211,7 +217,7 @@ function buildCriteriaBuilder(container, fieldOperators, fieldOrder, initial) {
 // of condition rows (used by the Playlist Filter step; Playlist Cleanup
 // uses a single condition via buildCriteriaBuilder directly). Follows the
 // same addRow/reset/getValues shape as createComboRowManager in
-// playlist_picker.js — the caller wires its own "+ Add" button to addRow().
+// playlist_picker.js - the caller wires its own "+ Add" button to addRow().
 function buildCriteriaListBuilder(containerEl, fieldOperators, fieldOrder) {
     let rows = [];
 
@@ -228,7 +234,12 @@ function buildCriteriaListBuilder(containerEl, fieldOperators, fieldOrder) {
         const rowSlot = document.createElement("span");
         rowSlot.style.flex = "1";
         wrap.appendChild(rowSlot);
-        const criteria = buildCriteriaBuilder(rowSlot, fieldOperators, fieldOrder, initial);
+        const criteria = buildCriteriaBuilder(
+            rowSlot,
+            fieldOperators,
+            fieldOrder,
+            initial,
+        );
 
         const removeBtn = document.createElement("button");
         removeBtn.type = "button";
@@ -254,7 +265,10 @@ function buildCriteriaListBuilder(containerEl, fieldOperators, fieldOrder) {
     function reset(initialValues) {
         containerEl.innerHTML = "";
         rows = [];
-        (initialValues && initialValues.length ? initialValues : [null]).forEach((v) => addRow(v));
+        (initialValues && initialValues.length
+            ? initialValues
+            : [null]
+        ).forEach((v) => addRow(v));
     }
 
     return {

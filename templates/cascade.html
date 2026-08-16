@@ -1,11 +1,10 @@
-{% extends "base.html" %}
-{% block title %}Cascade - Spotify Library Manager{% endblock %}
-{% block content %}
+{% extends "base.html" %} {% block title %}Cascade - Rotation{% endblock %} {%
+block content %}
 <h1>Cascade</h1>
 <p>
-    Chain functions together. Every playlist your steps need is fetched once,
-    no matter how many steps use it — then each step runs in order, with a
-    chance to review before it changes anything.
+    Chain functions together. Every playlist your steps need is fetched once, no
+    matter how many steps use it - then each step runs in order, with a chance
+    to review before it changes anything.
 </p>
 
 {% if needs_credentials %}
@@ -21,7 +20,7 @@
 <p><strong>Add a step</strong> (each function can be used once):</p>
 <div class="cascade-palette" id="palette"></div>
 
-<p class="cascade-empty" id="empty-hint">No steps yet — add one above.</p>
+<p class="cascade-empty" id="empty-hint">No steps yet - add one above.</p>
 <div class="cascade-step-list" id="step-list"></div>
 
 <p class="warning" id="builder-error" style="display: none"></p>

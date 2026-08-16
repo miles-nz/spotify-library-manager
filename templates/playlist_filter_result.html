@@ -1,15 +1,16 @@
-{% extends "base.html" %} {% block title %}Matches - Spotify Library Manager{%
-endblock %} {% block extra_style %} .version-warning { display: none;
-color: var(--warning); font-size: 0.85rem; flex-basis: 100%; margin-left: 1.6rem; }
+{% extends "base.html" %} {% block title %}Matches - Rotation{% endblock %} {%
+block extra_style %} .version-warning { display: none; color: var(--warning);
+font-size: 0.85rem; flex-basis: 100%; margin-left: 1.6rem; }
 #matches-list.show-version-warnings .version-warning { display: block; }
-#version-check-summary { color: var(--warning); } {% endblock %} {% block content %}
+#version-check-summary { color: var(--warning); } {% endblock %} {% block
+content %}
 <h1>Matches</h1>
 
 {% if cascade_step %}
-<p class="cascade-banner">Step {{ cascade_step }} of {{ cascade_total }} — {{ cascade_label }}</p>
-{% endif %}
-
-{% if not matches %} {% if already_in_destination %}
+<p class="cascade-banner">
+    Step {{ cascade_step }} of {{ cascade_total }} - {{ cascade_label }}
+</p>
+{% endif %} {% if not matches %} {% if already_in_destination %}
 <p class="hint">
     {{ already_in_destination }} track{{ 's' if already_in_destination != 1 else
     '' }} matched your condition, but {{ 'they' if already_in_destination != 1
@@ -18,15 +19,16 @@ color: var(--warning); font-size: 0.85rem; flex-basis: 100%; margin-left: 1.6rem
 </p>
 {% else %}
 <p class="hint">No tracks matched that condition.</p>
-{% endif %}
-{% if cascade_step %}
-<form method="post" action="{{ form_action or url_for('playlist_filter_apply') }}">
+{% endif %} {% if cascade_step %}
+<form
+    method="post"
+    action="{{ form_action or url_for('playlist_filter_apply') }}"
+>
     <button class="button" type="submit">Continue</button>
 </form>
 {% else %}
 <p><a class="button" href="{{ url_for('playlist_filter_picker') }}">Back</a></p>
-{% endif %}
-{% else %}
+{% endif %} {% else %}
 <p>
     {% if destination_mode == 'new' %} Found {{ matches|length }} matching
     track{{ 's' if matches|length != 1 else '' }}. These will be added to a new
@@ -48,7 +50,10 @@ color: var(--warning); font-size: 0.85rem; flex-basis: 100%; margin-left: 1.6rem
 <p id="version-check-summary" style="display: none"></p>
 {% endif %}
 
-<form method="post" action="{{ form_action or url_for('playlist_filter_apply') }}">
+<form
+    method="post"
+    action="{{ form_action or url_for('playlist_filter_apply') }}"
+>
     <div id="matches-list">
         {% for track in matches %}
         <label class="match">

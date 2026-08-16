@@ -1,11 +1,13 @@
-{% extends "base.html" %} {% block title %}Preview changes - Spotify Library
-Manager{% endblock %} {% block extra_style %} h2 { margin-top: 2rem; } ul {
-max-height: 16rem; overflow-y: auto; padding-left: 1.2rem; } .empty { color:
-var(--muted); } {% endblock %} {% block content %}
+{% extends "base.html" %} {% block title %}Preview changes - Rotation{% endblock
+%} {% block extra_style %} h2 { margin-top: 2rem; } ul { max-height: 16rem;
+overflow-y: auto; padding-left: 1.2rem; } .empty { color: var(--muted); } {%
+endblock %} {% block content %}
 <h1>Preview</h1>
 
 {% if cascade_step %}
-<p class="cascade-banner">Step {{ cascade_step }} of {{ cascade_total }} — {{ cascade_label }}</p>
+<p class="cascade-banner">
+    Step {{ cascade_step }} of {{ cascade_total }} - {{ cascade_label }}
+</p>
 {% endif %}
 
 <h2>Add ({{ add_count }})</h2>
@@ -44,9 +46,17 @@ var(--muted); } {% endblock %} {% block content %}
 </p>
 {% endif %}
 
-<form action="{{ form_action or url_for('apply') }}" method="post" style="margin-top: 2rem">
-    <button class="button" type="submit">{{ 'Continue' if cascade_step else 'Apply' }}</button>
-    <a class="button secondary" href="{{ cancel_url or url_for('liked_songs_sync') }}"
+<form
+    action="{{ form_action or url_for('apply') }}"
+    method="post"
+    style="margin-top: 2rem"
+>
+    <button class="button" type="submit">
+        {{ 'Continue' if cascade_step else 'Apply' }}
+    </button>
+    <a
+        class="button secondary"
+        href="{{ cancel_url or url_for('liked_songs_sync') }}"
         >Cancel</a
     >
 </form>
